@@ -2,3 +2,5 @@ data/videos/
 lib/
 etc/
 bin/
+share/
+.DS_Store
