@@ -10,9 +10,11 @@ import sklearn.svm as svm
 def ProcessFrameForMotionEstimation(frame):
     f = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     f = cv2.bilateralFilter(f, -1, 9.0, 5.0)
-    return f #cv2.medianBlur(, 5)
+    return f  # cv2.medianBlur(, 5)
+
 
 trackingPoint = None
+
 
 def SelectTrackingPoint(frame):
     global trackingPoint
@@ -35,21 +37,30 @@ def SelectTrackingPoint(frame):
             cv2.circle(drawPoint, trackingPoint, 9, [255, 0, 0], 2, cv2.LINE_AA)
             cv2.imshow(winTitle, drawPoint)
 
-        if cv2.waitKey(1) == ord('q'):
+        if cv2.waitKey(1) == ord("q"):
             break
-
 
     cv2.destroyWindow(winTitle)
 
 
+calibrationDataPath = "data/calibration.xml"
+dataPath = "data/videos/2016_0718_200947_002"  # input video path
 sampleVideoPath = "data/videos/EE3.MOV"
 startFrame = 3000
 motionThreshold = 10
 maxDistance = 100
 
-trackingParams = dict(winSize=(9,9),
-                      maxLevel=2,
-                      criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+# read calibration data
+storage = cv2.FileStorage(calibrationDataPath, cv2.FILE_STORAGE_READ)
+mtx = storage.getNode("mtx").mat()
+dist_params = storage.getNode("dist").mat()
+storage.release()
+
+trackingParams = dict(
+    winSize=(9, 9),
+    maxLevel=2,
+    criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03),
+)
 
 videoStream = cv2.VideoCapture(sampleVideoPath)
 
@@ -67,7 +78,7 @@ trackingPoint = None
 sampleWindow = 32
 hog = cv2.HOGDescriptor((sampleWindow, sampleWindow), (16, 16), (8, 8), (16, 16), 8)
 
-with open("data/svc.pickle", 'rb') as f:
+with open("data/svc.pickle", "rb") as f:
     svc = pickle.load(f)
 
 
@@ -85,6 +96,7 @@ def inBounds(cx, cy, s2):
 
     return True
 
+
 def trajectoryLength(trajectory):
     if len(trajectory) < 2:
         return 0.0
@@ -96,6 +108,7 @@ def trajectoryLength(trajectory):
         prev = p
 
     return sumlength
+
 
 def drawTrajectory(frame, trajectory, thickness=1):
     if len(trajectory) < 9:
@@ -123,7 +136,7 @@ def drawTrajectory(frame, trajectory, thickness=1):
         h = 29 + int(150.0 * (i * intensityIncrement))
         s = 255
         v = 255
-        bgr = cv2.cvtColor(np.array([[ [h, s, v] ]], dtype=np.uint8), cv2.COLOR_HSV2BGR)
+        bgr = cv2.cvtColor(np.array([[[h, s, v]]], dtype=np.uint8), cv2.COLOR_HSV2BGR)
         color = bgr[0, 0]
         color = (int(color[0]), int(color[1]), int(color[2]))
 
@@ -131,6 +144,7 @@ def drawTrajectory(frame, trajectory, thickness=1):
         prev = p
 
     return dframe
+
 
 # skipping frames towards the start frame
 endReading = False
@@ -153,7 +167,6 @@ WIN_NAME = "Trajectory Tracking"
 cv2.namedWindow(WIN_NAME, cv2.WINDOW_NORMAL)
 
 while True:
-
     readFrame = 0
 
     while True:
@@ -169,11 +182,14 @@ while True:
     if endReading:
         break
 
-
+    # undistort frame
+    frame = cv2.undistort(frame, mtx, dist_params)
     frame = ProcessFrameForMotionEstimation(frame)
 
     # calculate distance
-    dist = (np.abs(frame.astype(np.float32) - prevFrame.astype(np.float32))).astype(np.uint8)
+    dist = (np.abs(frame.astype(np.float32) - prevFrame.astype(np.float32))).astype(
+        np.uint8
+    )
 
     _, dst = cv2.threshold(dist, motionThreshold, 255, cv2.THRESH_BINARY)
 
@@ -197,15 +213,17 @@ while True:
 
         for c in contours:
             x, y, w, h = cv2.boundingRect(c)
-            cx = int(x + w/2)
-            cy = int(y + h/2)
-            s2 = int(sampleWindow/2)
+            cx = int(x + w / 2)
+            cy = int(y + h / 2)
+            s2 = int(sampleWindow / 2)
 
             if not inBounds(cx, cy, s2):
                 continue
 
-            bb = (cx-s2, cy-s2, sampleWindow, sampleWindow)
-            roi = frame[cy-s2:cy-s2+sampleWindow, cx-s2:cx-s2+sampleWindow]
+            bb = (cx - s2, cy - s2, sampleWindow, sampleWindow)
+            roi = frame[
+                cy - s2 : cy - s2 + sampleWindow, cx - s2 : cx - s2 + sampleWindow
+            ]
             desc = hog.compute(roi)
             res = svc.predict([desc])
 
@@ -225,7 +243,10 @@ while True:
             if len(positives) == 1:
                 trackingPoint = positives[0]
         else:
-            distances = map(lambda p: np.linalg.norm(np.array(p) - np.array(trackingPoint)), positives)
+            distances = map(
+                lambda p: np.linalg.norm(np.array(p) - np.array(trackingPoint)),
+                positives,
+            )
             positives = sorted(zip(positives, distances), key=lambda p: p[1])
 
             if positives[0][1] < maxDistance:
@@ -237,13 +258,22 @@ while True:
     dframe = drawTrajectory(dframe, trajectory)
     travelDistance = trajectoryLength(trajectory)
 
-    cv2.putText(dframe, "Travel Distance (px): {:.2f}".format(travelDistance), (30, imrows-50), cv2.FONT_HERSHEY_PLAIN, 1.0, (190, 250, 150), 1, cv2.LINE_AA)
+    cv2.putText(
+        dframe,
+        "Travel Distance (px): {:.2f}".format(travelDistance),
+        (30, imrows - 50),
+        cv2.FONT_HERSHEY_PLAIN,
+        1.0,
+        (190, 250, 150),
+        1,
+        cv2.LINE_AA,
+    )
 
     cv2.imshow(WIN_NAME, dframe)
     # cv2.imshow("movement", dst)
 
     ret = cv2.waitKey(1)
-    if ret == ord('q'):
+    if ret == ord("q"):
         break
 
 videoStream.release()
