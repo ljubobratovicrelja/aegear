@@ -4,3 +4,4 @@ etc/
 bin/
 share/
 .DS_Store
+pyvenv.cfg
