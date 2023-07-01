@@ -18,10 +18,10 @@ startFrame = 1000
 skipFrames = 10
 motionThreshold = 10
 
-trainingOutput = "data/videos/training"
+trainingOutput = "data/training"
 
-inlierName = "inlier"
-outlierName = "outlier"
+inlierName = "fish"
+outlierName = "background"
 
 winTitle = "Training Frame Selection"
 
@@ -29,8 +29,8 @@ sampleWindow = (32, 32)
 frame = None
 trackingPoint = None
 
-numInliers = len(list(filter(lambda f: inlierName in f, os.listdir(trainingOutput))))
-numOutliers = len(list(filter(lambda f: outlierName in f, os.listdir(trainingOutput))))
+numInliers = len(list(os.listdir(os.path.join(trainingOutput, inlierName))))
+numOutliers = len(list(os.listdir(os.path.join(trainingOutput, outlierName))))
 
 print("Inlier samples: {}, Outlier Samples: {}".format(numInliers, numOutliers))
 
@@ -50,17 +50,22 @@ def onMouse(event, x, y, flags, param):
     sample = frame[y-sy2:y+sy2+1, x-sx2:x+sx2+1]
 
     if event == cv2.EVENT_LBUTTONDOWN:
-        cv2.imwrite(trainingOutput + "/{}_{:06d}.png".format(inlierName, numInliers), sample)
+        imgPath = os.path.join(trainingOutput, inlierName, "sample_{:06d}.png".format(numInliers))
+        print(imgPath)
+        cv2.imwrite(imgPath, sample)
         numInliers = numInliers + 1
     elif event == cv2.EVENT_RBUTTONDOWN:
-        cv2.imwrite(trainingOutput + "/{}_{:06d}.png".format(outlierName, numOutliers), sample)
+        imgPath = os.path.join(trainingOutput, outlierName, "sample_{:06d}.png".format(numOutliers))
+        print(imgPath)
+        cv2.imwrite(imgPath, sample)
         numOutliers = numOutliers + 1
     else:
         return
 
     print("Inlier samples: {}, Outlier Samples: {}".format(numInliers, numOutliers))
-    frame = cv2.circle(frame, trackingPoint, sx2, [255, 0, 0])
-    cv2.imshow(winTitle, frame)
+    frame_draw = frame.copy()
+    frame_draw = cv2.circle(frame_draw, trackingPoint, sx2, [255, 0, 0])
+    cv2.imshow(winTitle, frame_draw)
 
 
 videoIndex = 0
