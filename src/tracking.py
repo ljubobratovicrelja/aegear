@@ -49,6 +49,7 @@ sampleVideoPath = "data/videos/EE3.MOV"
 startFrame = 3000
 motionThreshold = 10
 maxDistance = 100
+output_video = "data/videos/tracking_example.mp4"
 
 # read calibration data
 storage = cv2.FileStorage(calibrationDataPath, cv2.FILE_STORAGE_READ)
@@ -166,6 +167,87 @@ trajectory = []
 WIN_NAME = "Trajectory Tracking"
 cv2.namedWindow(WIN_NAME, cv2.WINDOW_NORMAL)
 
+# select frame and calculate pixel to cm ratio
+frame = cv2.undistort(frame, mtx, dist_params)
+frame = ProcessFrameForMotionEstimation(frame)
+
+pts = []
+
+
+def select_points(event, x, y, flags, param):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        pts.append((x, y))
+        print("Point selected: {}".format((x, y)))
+
+
+cv2.setMouseCallback(WIN_NAME, select_points)
+
+while True:
+    draw_frame = np.copy(frame)
+
+    for pt in pts:
+        cv2.circle(draw_frame, pt, 5, (0, 255, 0))
+
+    cv2.imshow(WIN_NAME, draw_frame)
+    if cv2.waitKey(1) == ord("q") or len(pts) == 4:
+        break
+
+if len(pts) != 4:
+    print("You must select 4 points")
+    sys.exit()
+
+persp_T = None
+sample_pts = np.array(pts, dtype=np.float32)
+
+real_pts = np.array(
+    [[0, 0], [149.0, 5.0], [149.0, 35.0], [0.0, 40.0]], dtype=np.float32
+)
+
+img_scaling_factor = (sample_pts[1, 0] - sample_pts[0, 0]) / (
+    real_pts[1, 0] - real_pts[0, 0]
+)
+
+# move points to match starting x position of samples, and scale up to image scale
+transformed_real_pts = real_pts * img_scaling_factor + sample_pts[0, :]
+
+print("Sample points: {}".format(sample_pts))
+print("Real points: {}".format(transformed_real_pts))
+
+# do perspective transform to rectify image
+persp_T = cv2.getPerspectiveTransform(sample_pts, transformed_real_pts)
+image_transformed = cv2.warpPerspective(frame, persp_T, frame.shape[0:2][::-1])
+
+# also warp points to be able to calculate pixel to cm ratio
+# add homogeneous coordinate
+sample_pts = np.hstack((sample_pts, np.ones((4, 1))))
+sample_pts = np.dot(persp_T, sample_pts.T).T
+
+# divide by homogeneous coordinate
+sample_pts = sample_pts[:, 0:2] / sample_pts[:, 2].reshape((4, 1))
+print("Transformed sample points: {}".format(sample_pts))
+
+# draw transformed samples on transformed image to prove all is transformed ok
+for i in range(4):
+    pt = (int(sample_pts[i, 0]), int(sample_pts[i, 1]))
+    cv2.circle(image_transformed, pt, 5, (255, 255, 0))
+
+cv2.imshow("Transformed", image_transformed)
+cv2.waitKey(0)
+cv2.destroyWindow("Transformed")
+
+# now calculate pixel to cm ratio
+pixel_to_cm_ratio = np.linalg.norm(real_pts[1, :] - real_pts[0, :]) / np.linalg.norm(
+    sample_pts[1, :] - sample_pts[0, :]
+)
+
+print("Pixel to cm ratio: {}".format(pixel_to_cm_ratio))
+
+# Define the codec and create a VideoWriter object
+frame_height, frame_width = frame.shape[0:2]
+fourcc = cv2.VideoWriter_fourcc(*"avc1")
+out = cv2.VideoWriter(output_video, fourcc, 60.0, (frame_width, frame_height))
+
+travelDistance = 0.0  # cm
 while True:
     readFrame = 0
 
@@ -185,6 +267,7 @@ while True:
     # undistort frame
     frame = cv2.undistort(frame, mtx, dist_params)
     frame = ProcessFrameForMotionEstimation(frame)
+    frame = cv2.warpPerspective(frame, persp_T, frame.shape[0:2][::-1])
 
     # calculate distance
     dist = (np.abs(frame.astype(np.float32) - prevFrame.astype(np.float32))).astype(
@@ -256,11 +339,11 @@ while True:
             trajectory.append(trackingPoint)
 
     dframe = drawTrajectory(dframe, trajectory)
-    travelDistance = trajectoryLength(trajectory)
+    travelDistance = trajectoryLength(trajectory) * pixel_to_cm_ratio
 
     cv2.putText(
         dframe,
-        "Travel Distance (px): {:.2f}".format(travelDistance),
+        "Travel Distance (cm): {:.2f}".format(travelDistance),
         (30, imrows - 50),
         cv2.FONT_HERSHEY_PLAIN,
         1.0,
@@ -269,12 +352,18 @@ while True:
         cv2.LINE_AA,
     )
 
-    cv2.imshow(WIN_NAME, dframe)
+    out.write(dframe)
+
+    # cv2.imshow(WIN_NAME, dframe)
     # cv2.imshow("movement", dst)
 
-    ret = cv2.waitKey(1)
-    if ret == ord("q"):
-        break
+    # ret = cv2.waitKey(1)
+    # if ret == ord("q"):
+    # break
 
+print("Final travel distance: {:.2f} cm".format(travelDistance))
+
+out.release()
 videoStream.release()
+
 cv2.destroyAllWindows()
