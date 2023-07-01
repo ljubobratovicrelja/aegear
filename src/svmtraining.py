@@ -6,22 +6,22 @@ import pickle
 ####################################################################################################
 # scripts setup
 
-sampleVideoPath = "data/videos/EE1.MOV"
+sampleVideoPath = "data/videos/"
+videoFiles = ["EE1.MOV", "K9.MOV", "S1.MOV"]
+
 modelPath=  "data/svc.pickle"
 startFrame = 3000
 skipFrames = 30
 motionThreshold = 10
 winTitle = "Training Frame Selection"
 
-videoStream = cv2.VideoCapture(sampleVideoPath)
-
-assert videoStream.isOpened(), "Failed opening video at {}".format(sampleVideoPath)
-
 sampleWindow = (32, 32)
 frame = None
 trackingPoint = None
 trainingPositiveSamples = []
 trainingNegativeSamples = []
+
+videoStream = None
 
 
 def onMouse(event, x, y, flags, param):
@@ -56,44 +56,59 @@ def onMouse(event, x, y, flags, param):
 cv2.namedWindow(winTitle, cv2.WINDOW_NORMAL)
 cv2.setMouseCallback(winTitle, onMouse)
 
-while True:
-    ret, frame = videoStream.read()
-    trackingPoint = None
-    if not ret:
-        break
+for videoFile in videoFiles:
+    videoPath = sampleVideoPath + videoFile
+    videoStream = cv2.VideoCapture(videoPath)
+    assert videoStream.isOpened(), "Failed opening video at {}".format(videoPath)
 
-    if startFrame > 0:
-        startFrame -= 1
-        continue
-
-    quitReading = False
-    for skipFrame in range(skipFrames):
-        ret, frame = videoStream.read()
-        if not ret:
-            quitReading = True
-            break
-
-    if quitReading:
-        break
-
-    print("Positive samples: {}, Negative Samples: {}".format(len(trainingPositiveSamples), len(trainingNegativeSamples)))
     while True:
-        cv2.imshow(winTitle, frame)
-        ret = cv2.waitKey(50)
-
-        if ret == ord('q'):
-            quitReading = True
+        goToNextVideo = False
+        ret, frame = videoStream.read()
+        trackingPoint = None
+        if not ret:
             break
-        if ret == 32:
-            break  # just skip this frame, its no good for training
 
-        if trackingPoint is not None:
+        if startFrame > 0:
+            startFrame -= 1
+            continue
+
+        quitReading = False
+        for skipFrame in range(skipFrames):
+            ret, frame = videoStream.read()
+            if not ret:
+                quitReading = True
+                break
+
+        if quitReading:
             break
+
+        print("Positive samples: {}, Negative Samples: {}".format(len(trainingPositiveSamples), len(trainingNegativeSamples)))
+        while True:
+            cv2.imshow(winTitle, frame)
+            ret = cv2.waitKey(50)
+
+            if ret == ord('q'):
+                quitReading = True
+                break
+            if ret == ord('n'):
+                goToNextVideo = True
+                break
+            if ret == 32:
+                break  # just skip this frame, its no good for training
+
+            if trackingPoint is not None:
+                break
+
+        if quitReading:
+            break
+        if goToNextVideo:
+            break
+
+    videoStream.release()
 
     if quitReading:
         break
 
-videoStream.release()
 cv2.destroyAllWindows()
 
 # description

@@ -4,12 +4,16 @@ import pickle
 import cv2
 import numpy as np
 from scipy.signal import savgol_filter
-import sklearn.svm as svm
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision import transforms
 
 
 def ProcessFrameForMotionEstimation(frame):
-    f = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    f = cv2.bilateralFilter(f, -1, 9.0, 5.0)
+    #f = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    f = cv2.bilateralFilter(frame, -1, 9.0, 5.0)
     return f  # cv2.medianBlur(, 5)
 
 
@@ -43,13 +47,49 @@ def SelectTrackingPoint(frame):
     cv2.destroyWindow(winTitle)
 
 
+IMG_HEIGHT = 32
+IMG_WIDTH = 32
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(1024, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 64)
+        self.fc4 = nn.Linear(64, 1)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2)
+        x = F.relu(self.conv3(x))
+        x = F.max_pool2d(x, 2)
+        x = F.relu(self.conv4(x))
+        x = F.max_pool2d(x, 2)
+        x = x.view(x.size(0), -1)  # Flatten layer
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = torch.sigmoid(self.fc4(x))
+        return x
+
 calibrationDataPath = "data/calibration.xml"
 dataPath = "data/videos/2016_0718_200947_002"  # input video path
-sampleVideoPath = "data/videos/S1.MOV"
+sampleVideoPath = "data/videos/K9.MOV"
 startFrame = 3000
-motionThreshold = 10
+motionThreshold = 25
 maxDistance = 100
 output_video = "data/videos/tracking_example"
+model_path = "data/model_cnn3.pth"
+
+# load pytorch model
+model = torch.load(model_path)
+model.eval()
 
 # read calibration data
 storage = cv2.FileStorage(calibrationDataPath, cv2.FILE_STORAGE_READ)
@@ -281,8 +321,11 @@ while True:
     frame = ProcessFrameForMotionEstimation(frame)
     frame = cv2.warpPerspective(frame, persp_T, frame.shape[0:2][::-1])
 
+    gframe = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gprevFrame = cv2.cvtColor(prevFrame, cv2.COLOR_BGR2GRAY)
+
     # calculate distance
-    dist = (np.abs(frame.astype(np.float32) - prevFrame.astype(np.float32))).astype(
+    dist = (np.abs(gframe.astype(np.float32) - gprevFrame.astype(np.float32))).astype(
         np.uint8
     )
 
@@ -290,7 +333,7 @@ while True:
 
     # morphological closing
     dst = cv2.erode(dst, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)))
-    dst = cv2.dilate(dst, cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15)))
+    dst = cv2.dilate(dst, cv2.getStructuringElement(cv2.MORPH_RECT, (13, 13)))
 
     dst = cv2.GaussianBlur(dst, (19, 19), 5.0)
     _, dst = cv2.threshold(dst, 100, 255, cv2.THRESH_BINARY)
@@ -301,12 +344,26 @@ while True:
     contours, _ = cv2.findContours(dst, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     positives = []
-    dframe = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+    dframe = frame.copy()
 
     if contours:
-        dframe = cv2.drawContours(dframe, contours, -1, (255, 0, 255), 1, cv2.LINE_AA)
+
+        this_frame_positives = []
+        min_area = 800
+        max_area = 3000
+
+        goodContours = []
+        badContours = []
 
         for c in contours:
+            area = cv2.contourArea(c)
+
+            if area < min_area or area > max_area:
+                badContours.append(c)
+                continue
+        
+            goodContours.append(c)
+
             x, y, w, h = cv2.boundingRect(c)
             cx = int(x + w / 2)
             cy = int(y + h / 2)
@@ -317,18 +374,49 @@ while True:
 
             bb = (cx - s2, cy - s2, sampleWindow, sampleWindow)
             roi = frame[
-                cy - s2 : cy - s2 + sampleWindow, cx - s2 : cx - s2 + sampleWindow
+                cy - s2 : cy - s2 + sampleWindow, cx - s2 : cx - s2 + sampleWindow, :
             ]
-            desc = hog.compute(roi)
-            res = svc.predict([desc])
+            
+            # Define the transformations
+            transform = transforms.Compose([
+                transforms.ToPILImage(),  # Convert np array to PIL Image
+                transforms.ToTensor(),  # Convert PIL Image to PyTorch tensor
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize with ImageNet mean and std
+            ])
 
-            if res and res[0] == 1:
-                color = (0, 255, 0)
-                positives.append((cx, cy))
+            # Apply transformations to the image
+            image_transformed = transform(roi)
+            image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
+
+            # Pass the transformed image to the model
+            output = model(image_transformed)
+
+            if output > 0.7:
+                this_frame_positives.append(((cx, cy), output))
+        
+        if len(this_frame_positives) != 0:
+            # sort by output
+            this_frame_positives = sorted(this_frame_positives, key=lambda p: p[1], reverse=True)
+
+            # if there's two, take the one that's closer to the center of the image
+            # this is to avoid mirror image issues
+            cx = None
+            cy = None
+            if len(this_frame_positives) == 2:
+                cx1, cy1 = this_frame_positives[0][0]
+                cx2, cy2 = this_frame_positives[1][0]
+                if abs(cx1 - frame_width / 2) > abs(cx2 - frame_width / 2):
+                    cx, cy = this_frame_positives[1][0]
+                else:
+                    cx, cy = this_frame_positives[0][0]
             else:
-                color = (0, 0, 255)
+                cx, cy = this_frame_positives[0][0]
 
-            # cv2.rectangle(dframe, bb, color, 1, cv2.LINE_AA)
+            color = (0, 255, 0)
+            positives.append((cx, cy))
+
+    dframe = cv2.drawContours(dframe, goodContours, -1, (0, 255, 0), 1, cv2.LINE_AA)
+    dframe = cv2.drawContours(dframe, badContours, -1, (0, 0, 255), 1, cv2.LINE_AA)
 
     # sample prev frame
     prevFrame = frame
