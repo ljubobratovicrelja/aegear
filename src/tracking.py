@@ -45,11 +45,11 @@ def SelectTrackingPoint(frame):
 
 calibrationDataPath = "data/calibration.xml"
 dataPath = "data/videos/2016_0718_200947_002"  # input video path
-sampleVideoPath = "data/videos/EE3.MOV"
+sampleVideoPath = "data/videos/S1.MOV"
 startFrame = 3000
 motionThreshold = 10
 maxDistance = 100
-output_video = "data/videos/tracking_example.mp4"
+output_video = "data/videos/tracking_example"
 
 # read calibration data
 storage = cv2.FileStorage(calibrationDataPath, cv2.FILE_STORAGE_READ)
@@ -244,8 +244,20 @@ print("Pixel to cm ratio: {}".format(pixel_to_cm_ratio))
 
 # Define the codec and create a VideoWriter object
 frame_height, frame_width = frame.shape[0:2]
-fourcc = cv2.VideoWriter_fourcc(*"avc1")
-out = cv2.VideoWriter(output_video, fourcc, 60.0, (frame_width, frame_height))
+
+# Detect the OS
+if sys.platform.startswith('win'):
+    # Windows
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(output_video + ".avi", fourcc, 24.0, (frame_width, frame_height))
+elif sys.platform.startswith('darwin'):
+    # macOS
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    out = cv2.VideoWriter(output_video + ".mp4", fourcc, 24.0, (frame_width, frame_height))
+else:
+    # Linux or other
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter(output_video + ".avi", fourcc, 24.0, (frame_width, frame_height))
 
 travelDistance = 0.0  # cm
 while True:
@@ -354,12 +366,12 @@ while True:
 
     out.write(dframe)
 
-    # cv2.imshow(WIN_NAME, dframe)
-    # cv2.imshow("movement", dst)
+    cv2.imshow(WIN_NAME, dframe)
+    cv2.imshow("movement", dst)
 
-    # ret = cv2.waitKey(1)
-    # if ret == ord("q"):
-    # break
+    ret = cv2.waitKey(1)
+    if ret == ord("q"):
+        break
 
 print("Final travel distance: {:.2f} cm".format(travelDistance))
 
