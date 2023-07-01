@@ -3,5 +3,6 @@ lib/
 etc/
 bin/
 share/
+Scripts/
 .DS_Store
 pyvenv.cfg
