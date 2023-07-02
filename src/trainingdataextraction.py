@@ -10,12 +10,9 @@ from tqdm import tqdm
 # scripts setup
 
 sampleVideoPath = "data/videos/"
-videoFiles = ["EE1", "K9", "S1"]
+videoFiles = ["K9","EE1", "S1"]
 
-modelPath =  "data/svc.pickle"
-dataPath = "data/training.npy"
-startFrame = 1000
-skipFrames = 10
+skipFrames = 5
 motionThreshold = 10
 
 trainingOutput = "data/training"
@@ -28,6 +25,7 @@ winTitle = "Training Frame Selection"
 sampleWindow = (32, 32)
 frame = None
 trackingPoint = None
+jumpFrame = False
 
 numInliers = len(list(os.listdir(os.path.join(trainingOutput, inlierName))))
 numOutliers = len(list(os.listdir(os.path.join(trainingOutput, outlierName))))
@@ -40,6 +38,7 @@ def onMouse(event, x, y, flags, param):
     global frame
     global numInliers
     global numOutliers
+    global jumpFrame
 
     # store point for drawing
     trackingPoint = (x, y)
@@ -54,6 +53,7 @@ def onMouse(event, x, y, flags, param):
         print(imgPath)
         cv2.imwrite(imgPath, sample)
         numInliers = numInliers + 1
+        jumpFrame = True
     elif event == cv2.EVENT_RBUTTONDOWN:
         imgPath = os.path.join(trainingOutput, outlierName, "sample_{:06d}.png".format(numOutliers))
         print(imgPath)
@@ -126,6 +126,13 @@ while True:
         if ret == ord('d'):
             frameIdx = cv2.getTrackbarPos('frame', winTitle)
             frameIdx = min(frameIdx+skipFrames, numImages-1)
+            cv2.setTrackbarPos('frame', winTitle, frameIdx)
+            update(frameIdx)
+
+        if jumpFrame:
+            jumpFrame = False
+            frameIdx = cv2.getTrackbarPos('frame', winTitle)
+            frameIdx = min(frameIdx+1, numImages-1)
             cv2.setTrackbarPos('frame', winTitle, frameIdx)
             update(frameIdx)
 
