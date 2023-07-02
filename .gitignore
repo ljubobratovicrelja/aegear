@@ -8,3 +8,4 @@ Scripts/
 .DS_Store
 pyvenv.cfg
 .vscode/
+src/__pycache__/
