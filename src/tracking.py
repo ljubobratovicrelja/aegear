@@ -6,25 +6,20 @@ import numpy as np
 from scipy.signal import savgol_filter
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torchvision import transforms
+
+from blockmatching import BlockMatching
+from classifier import Classifier
+from mazecalibration import MazeCalibration
 
 
 TRACKING_POINT = None
 IMROWS = 0
 IMCOLS = 0
+WIN_NAME = "Trajectory Tracking"
 
 def ProcessFrameForMotionEstimation(frame):
-    #f = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    f = cv2.bilateralFilter(frame, -1, 9.0, 5.0)
-    return f  # cv2.medianBlur(, 5)
-
-
-def select_points(event, x, y, flags, param):
-    if event == cv2.EVENT_LBUTTONDOWN:
-        pts.append((x, y))
-        print("Point selected: {}".format((x, y)))
+    return cv2.bilateralFilter(frame, -1, 9.0, 5.0) 
 
 
 def SelectTrackingPoint(frame):
@@ -125,30 +120,6 @@ def drawTrajectory(frame, trajectory, thickness=1):
     return dframe
 
 
-IMG_HEIGHT = 32
-IMG_WIDTH = 32
-
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(2048, 128)
-        self.fc2 = nn.Linear(128, 1)
-
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x, 2)
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x, 2)
-        x = F.relu(self.conv3(x))
-        x = F.max_pool2d(x, 2)
-        x = x.view(x.size(0), -1)  # Flatten layer
-        x = F.relu(self.fc1(x))
-        x = torch.sigmoid(self.fc2(x))
-        return x
-
 calibrationDataPath = "data/calibration.xml"
 dataPath = "data/videos/2016_0718_200947_002"  # input video path
 sampleVideoPath = "data/videos"
@@ -171,11 +142,18 @@ model.to("cpu")
 
 model.eval()
 
-# read calibration data
-storage = cv2.FileStorage(calibrationDataPath, cv2.FILE_STORAGE_READ)
-mtx = storage.getNode("mtx").mat()
-dist_params = storage.getNode("dist").mat()
-storage.release()
+# create block matching object
+blockMatching = BlockMatching(0.5, 16, 16)
+
+# create maze characterization object
+maze_calibration = MazeCalibration(calibrationDataPath)
+
+endReading = False
+
+frame = None
+prevFrame = None
+
+cv2.namedWindow(WIN_NAME, cv2.WINDOW_NORMAL)
 
 for videoName in videosToTrack:
     videoPath = os.path.join(sampleVideoPath, videoName)
@@ -184,117 +162,45 @@ for videoName in videosToTrack:
     videoStream = cv2.VideoCapture(videoPath)
     assert videoStream.isOpened(), "Failed opening video at {}".format(videoPath)
 
-    ret, prevFrame = videoStream.read()
-    assert ret, "Failed reading first frame."
-
-    IMROWS, IMCOLS = prevFrame.shape[0:2]
-
-    prevFrame = ProcessFrameForMotionEstimation(prevFrame)
-    TRACKING_POINT = None
-
-    # skipping frames towards the start frame
-    endReading = False
-    while startFrame > 0:
-        ret, frame = videoStream.read()
-        startFrame -= 1
-
-        if not ret:
-            endReading = True
-            break
-
-    if endReading:
-        print("Skipping way too many frames")
-        sys.exit()
-
     trajectory = []
-
-    WIN_NAME = "Trajectory Tracking"
-    cv2.namedWindow(WIN_NAME, cv2.WINDOW_NORMAL)
-
-    # select frame and calculate pixel to cm ratio
-    frame = cv2.undistort(frame, mtx, dist_params)
-    frame = ProcessFrameForMotionEstimation(frame)
-
     pts = []
 
-    cv2.setMouseCallback(WIN_NAME, select_points)
+    ret, frame = videoStream.read()
+    if not ret:
+        # end of video
+        break
 
-    while True:
-        draw_frame = np.copy(frame)
+    # select frame and calculate pixel to cm ratio
+    frame = ProcessFrameForMotionEstimation(frame)
 
-        for pt in pts:
-            cv2.circle(draw_frame, pt, 5, (0, 255, 0))
+    # reset image size and tracking point set to 
+    IMROWS, IMCOLS = frame.shape[0:2]
 
-        cv2.imshow(WIN_NAME, draw_frame)
-        if cv2.waitKey(1) == ord("q") or len(pts) == 4:
-            break
-
-    if len(pts) != 4:
-        print("You must select 4 points")
-        sys.exit()
-
-    persp_T = None
-    sample_pts = np.array(pts, dtype=np.float32)
-
-    real_pts = np.array(
-        [[0, 0], [149.0, 5.0], [149.0, 35.0], [0.0, 40.0]], dtype=np.float32
-    )
-
-    img_scaling_factor = (sample_pts[1, 0] - sample_pts[0, 0]) / (
-        real_pts[1, 0] - real_pts[0, 0]
-    )
-
-    # move points to match starting x position of samples, and scale up to image scale
-    transformed_real_pts = real_pts * img_scaling_factor + sample_pts[0, :]
-
-    print("Sample points: {}".format(sample_pts))
-    print("Real points: {}".format(transformed_real_pts))
-
-    # do perspective transform to rectify image
-    persp_T = cv2.getPerspectiveTransform(sample_pts, transformed_real_pts)
-    image_transformed = cv2.warpPerspective(frame, persp_T, frame.shape[0:2][::-1])
-
-    # also warp points to be able to calculate pixel to cm ratio
-    # add homogeneous coordinate
-    sample_pts = np.hstack((sample_pts, np.ones((4, 1))))
-    sample_pts = np.dot(persp_T, sample_pts.T).T
-
-    # divide by homogeneous coordinate
-    sample_pts = sample_pts[:, 0:2] / sample_pts[:, 2].reshape((4, 1))
-    print("Transformed sample points: {}".format(sample_pts))
-
-    # draw transformed samples on transformed image to prove all is transformed ok
-    for i in range(4):
-        pt = (int(sample_pts[i, 0]), int(sample_pts[i, 1]))
-        cv2.circle(image_transformed, pt, 5, (255, 255, 0))
-
-    cv2.imshow("Transformed", image_transformed)
-    cv2.waitKey(0)
-    cv2.destroyWindow("Transformed")
-
-    # now calculate pixel to cm ratio
-    pixel_to_cm_ratio = np.linalg.norm(real_pts[1, :] - real_pts[0, :]) / np.linalg.norm(
-        sample_pts[1, :] - sample_pts[0, :]
-    )
-
+    pixel_to_cm_ratio = maze_calibration.calibrate(frame)
     print("Pixel to cm ratio: {}".format(pixel_to_cm_ratio))
 
-    # Define the codec and create a VideoWriter object
-    frame_height, frame_width = frame.shape[0:2]
+    frame = maze_calibration.rectify_image(frame)
+
+    # first assign as previous frame, then read next frame
+    prevFrame = frame.copy()
+
+    cv2.imshow("Transformed", frame)
+    cv2.waitKey(0)
+    cv2.destroyWindow("Transformed")
 
     # Detect the OS
     if sys.platform.startswith('win'):
         # Windows
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        out = cv2.VideoWriter(outputVideoPath + ".avi", fourcc, outputFps, (frame_width, frame_height))
+        out = cv2.VideoWriter(outputVideoPath + ".avi", fourcc, outputFps, (IMCOLS, IMROWS))
     elif sys.platform.startswith('darwin'):
         # macOS
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        out = cv2.VideoWriter(outputVideoPath + ".mp4", fourcc, outputFps, (frame_width, frame_height))
+        out = cv2.VideoWriter(outputVideoPath + ".mp4", fourcc, outputFps, (IMCOLS, IMROWS))
     else:
         # Linux or other
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        out = cv2.VideoWriter(outputVideoPath + ".avi", fourcc, outputFps, (frame_width, frame_height))
+        out = cv2.VideoWriter(outputVideoPath + ".avi", fourcc, outputFps, (IMCOLS, IMROWS))
 
     travelDistance = 0.0  # cm
     frameId = 0
@@ -318,12 +224,17 @@ for videoName in videosToTrack:
             break
 
         # undistort frame
-        frame = cv2.undistort(frame, mtx, dist_params)
         frame = ProcessFrameForMotionEstimation(frame)
-        frame = cv2.warpPerspective(frame, persp_T, frame.shape[0:2][::-1])
+        frame = maze_calibration.rectify_image(frame)
 
         gframe = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gprevFrame = cv2.cvtColor(prevFrame, cv2.COLOR_BGR2GRAY)
+
+        # calculate motion
+        motion = blockMatching.detect(gprevFrame, gframe)
+        motion = cv2.normalize(motion, None, 0, 255, cv2.NORM_MINMAX)
+        cv2.imshow("motion", motion)
+        cv2.waitKey()
 
         # drawing frame
         dframe = frame.copy()
@@ -409,7 +320,7 @@ for videoName in videosToTrack:
                     if len(this_frame_positives) == 2:
                         cx1, cy1 = this_frame_positives[0][0]
                         cx2, cy2 = this_frame_positives[1][0]
-                        if abs(cx1 - frame_width / 2) > abs(cx2 - frame_width / 2):
+                        if abs(cx1 - IMCOLS / 2) > abs(cx2 - IMROWS / 2):
                             cx, cy = this_frame_positives[1][0]
                         else:
                             cx, cy = this_frame_positives[0][0]
