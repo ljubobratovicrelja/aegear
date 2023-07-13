@@ -9,3 +9,4 @@ Scripts/
 pyvenv.cfg
 .vscode/
 src/__pycache__/
+*.pyc
