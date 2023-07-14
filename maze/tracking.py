@@ -1,4 +1,6 @@
 import sys
+sys.path.append(".")
+
 import os
 
 import cv2
@@ -8,9 +10,9 @@ from scipy.signal import savgol_filter
 import torch
 from torchvision import transforms
 
-from blockmatching import BlockMatching
-from classifier import Classifier
-from mazecalibration import MazeCalibration
+from maze.blockmatching import BlockMatching
+from maze.classifier import Classifier
+from maze.mazecalibration import MazeCalibration
 
 
 TRACKING_POINT = None
