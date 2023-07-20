@@ -40,11 +40,7 @@ class MazeCalibration:
         if event == cv2.EVENT_LBUTTONDOWN:
             self._pts.append((x, y))
 
-        dimage = self._image.copy()
-        for pt in self._pts:
-            dimage = cv2.circle(dimage, pt, 5, (0, 255, 0))
 
-        cv2.imshow(self._winName, dimage)
     
     def calibrate(self, image):
         """
@@ -72,6 +68,11 @@ class MazeCalibration:
         while(True):
             if len(self._pts) == 4 or cv2.waitKey(20) & 0xFF == 27:  # Exit if ESC key is pressed or we have 4 points
                 break
+
+            dimage = self._image.copy()
+            for pt in self._pts:
+                dimage = cv2.circle(dimage, pt, 5, (0, 255, 0))
+            cv2.imshow(self._winName, dimage)
         
         assert len(self._pts) == 4, "Need 4 points to calculate pixel to cm ratio"
 
