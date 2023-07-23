@@ -126,10 +126,10 @@ calibrationDataPath = "data/calibration.xml"
 dataPath = "data/videos/2016_0718_200947_002"  # input video path
 sampleVideoPath = "data/videos"
 videosToTrack = ["K9.MOV"] # "S1.MOV", "EE1.MOV", "EE3.MOV", "EE4.MOV"]
-startFrame = 3000
-motionThreshold = 10
+startFrame = 5000
+motionThreshold = 15
 maxDistance = 100
-inlierThreshold = 0.85
+inlierThreshold = 0.9
 trajectorySmoothingFactory = 11
 output_video = "data/videos/tracking_{}"
 model_path = "data/model_cnn4.pth"
@@ -145,7 +145,7 @@ model.to("cpu")
 model.eval()
 
 # create block matching object
-blockMatching = BlockMatching(0.5, 16, 16)
+blockMatching = BlockMatching(32, 0.5)
 
 # create maze characterization object
 maze_calibration = MazeCalibration(calibrationDataPath)
@@ -233,10 +233,10 @@ for videoName in videosToTrack:
         gprevFrame = cv2.cvtColor(prevFrame, cv2.COLOR_BGR2GRAY)
 
         # calculate motion
-        motion = blockMatching.detect(gprevFrame, gframe)
+        motion = blockMatching.detect_changes(gprevFrame, gframe)
         motion = cv2.normalize(motion, None, 0, 255, cv2.NORM_MINMAX)
         cv2.imshow("motion", motion)
-        cv2.waitKey()
+        cv2.waitKey(1)
 
         # drawing frame
         dframe = frame.copy()
