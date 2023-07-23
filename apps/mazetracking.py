@@ -25,6 +25,8 @@ from moviepy.editor import VideoFileClip
 from mazecalibration import MazeCalibration
 from motiondetection import MotionDetector
 
+from trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
+
 # needed for the classifier loading
 import maze.classifier
 
@@ -114,7 +116,13 @@ class MainWindow(tk.Tk):
         self._calibration_running = False
         self._pixel_to_cm_ratio = 1.0  # default to 1.0
 
+        # drawing variable
+        self._draw_trajectory = tk.BooleanVar()
+        self._draw_trajectory.set(False)
+
+
         self._fish_tracking = {}
+        self._trajectory_smooth_size = 11
 
         self._classification_threshold = 0.85
         self._classifier_model = None
@@ -141,8 +149,15 @@ class MainWindow(tk.Tk):
 
         self.dialog_window.title("Load Video")
 
+        #### DEBUG PART ######
         #initial_video = filedialog.askopenfilename(parent=self.dialog_window)
         initial_video = "data/videos/K9.MOV"
+
+        self._classifier_model = torch.load("data/model_cnn4.pth")
+        self._classifier_model.to("cpu")
+
+        self._classifier_model.eval()
+        #### DEBUG PART END ######
 
         if initial_video == "":
             # warning dialog and close the app
@@ -203,6 +218,9 @@ class MainWindow(tk.Tk):
         self.motion_threshold_scale.set(0.03)
         self.motion_threshold_scale.pack(side=tk.LEFT)
 
+        self.draw_trajectory_checkbox = tk.Checkbutton(self.right_frame, text="Draw Trajectory", variable=self._draw_trajectory)
+        self.draw_trajectory_checkbox.pack(side=tk.LEFT)
+
         self.prev_frame_button = tk.Button(self.right_frame, text=u"\u23EE", command=self._prev_frame)
         self.prev_frame_button.pack(side=tk.LEFT)
 
@@ -218,6 +236,10 @@ class MainWindow(tk.Tk):
         # have a status bar at the bottom
         self.status_bar = tk.Label(self.bottom_frame, text="Not Calibrated", fg="red", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # status bar specifically dedicated toward recording the travel distance
+        self.distance_status_bar = tk.Label(self.bottom_frame, text="Distance: 0.0 cm", fg="blue", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.distance_status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
         self.update_gui()
 
@@ -269,6 +291,10 @@ class MainWindow(tk.Tk):
         return motion_samples
 
     def _run_tracking(self):
+        if self._classifier_model is None:
+            messagebox.showerror("Error", "Please load a classifier model first.")
+            return
+        
         if self.track_bar.processing_start is None or self.track_bar.processing_end is None:
             messagebox.showerror("Error", "Please set the processing start and end frames.")
             return
@@ -276,11 +302,19 @@ class MainWindow(tk.Tk):
         # Create a new window
         task_window = tk.Toplevel(self)
         task_window.title("Tracking")
-        task_window.geometry("300x100")
+        task_window.geometry("300x150")
+
+        # label showing the current frame
+        frame_label = tk.Label(task_window, text="Frame: 0")
+        frame_label.pack()
 
         # Create a progress bar
         progress = ttk.Progressbar(task_window, length=200)
         progress.pack(pady=20)
+
+        # label describing the task
+        task_label = tk.Label(task_window, text="Tracking fish in the maze...")
+        task_label.pack()
 
         # Create a cancel button
         cancel_button = tk.Button(task_window, text="Cancel", command=task_window.destroy)
@@ -294,38 +328,96 @@ class MainWindow(tk.Tk):
         progress_increment = 100.0 / (track_end_frame - track_start_frame)
         progress_value = 0.0
 
-        for i in range(track_start_frame, track_end_frame):
-            if i == 0 or i == self._num_frames:
+        # size of the classifiers window
+        sample_size = 32
+        sample_size_half = sample_size // 2
+
+        for frame_id in range(track_start_frame, track_end_frame):
+            # update the label
+            frame_label['text'] = "Frame: {}".format(frame_id)
+
+            if frame_id == 0 or frame_id == self._num_frames:
                 # we need the previous and the next frame to perform tracking, so just skip the first and last frame
                 continue
-
-            time.sleep(0.001)
 
             progress_value = progress_value + progress_increment
             progress['value'] = progress_value
 
-            # perform tracking
-            motion = self._motion_detector.detect(self._read_frame(i - 1), self._read_frame(i))
+            # update the label that we detect motion
+            task_label['text'] = "Detecting motion in frame {}...".format(frame_id)
 
+            # positive hits, potential fish locations
             positives = []
 
-            # sample motion and test classifier
-            for (i, j) in self._sample_motion(motion):
-                row = i * self._motion_detector.block_size + self._motion_detector.block_size // 2
-                col = j * self._motion_detector.block_size + self._motion_detector.block_size // 2
+            if frame_id - 1 in self._fish_tracking:
+                # we already have the previous frame tracked, so we can just use that as the starting point
+                # we search around it for the fish
+                (col, row) = self._fish_tracking[frame_id - 1]
 
-                # sample 32x32 and test classifier
-                sample = self._current_frame[row - 16:row + 16, col - 16:col + 16]
+                step_size = 4  # we step left, right, up, down for every step size
+                search_area = 64  # we search for this area size
 
-                # Apply transformations to the image
-                image_transformed = self._transform(sample)
-                image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
+                for i in range (-search_area // 2, search_area // 2, step_size):
+                    for j in range (-search_area // 2, search_area // 2, step_size):
 
-                # Pass the transformed image to the model
-                output = self._classifier_model(image_transformed)
+                        row_new = row + i
+                        col_new = col + j
 
-                if output > self._classification_threshold:
-                    positives.append((output, (row, col)))
+                        if row_new - sample_size_half < 0 or row_new + sample_size_half >= self._current_frame.shape[0]:
+                            continue
+                    
+                        if col_new - sample_size_half < 0 or col_new + sample_size_half >= self._current_frame.shape[1]:
+                            continue
+
+                        # sample 32x32 and test classifier
+                        sample = self._current_frame[row_new - sample_size_half:row_new + sample_size_half, col_new - sample_size_half:col_new + sample_size_half]
+
+                        # Apply transformations to the image
+                        image_transformed = self._transform(sample)
+                        image_transformed = image_transformed.unsqueeze(0)
+
+                        # update the label that we run the classifier
+                        task_label['text'] = "Running classifier on frame {}...".format(i)
+
+                        # Pass the transformed image to the model
+                        output = self._classifier_model(image_transformed)
+
+                        if output > self._classification_threshold:
+                            positives.append((output, (col_new, row_new)))
+            else:
+                # perform tracking
+                motion = self._motion_detector.detect(self._read_frame(frame_id - 1), self._read_frame(frame_id))
+
+                # sample motion and test classifier
+                for (i, j) in self._sample_motion(motion):
+                    
+                    block_size = self._motion_detector.block_size
+                    block_half = self._motion_detector.block_size // 2
+
+                    row = i * block_size + block_half
+                    col = j * block_size + block_half
+
+                    if row - sample_size_half < 0 or row + sample_size_half >= self._current_frame.shape[0]:
+                        continue
+                
+                    if col - sample_size_half < 0 or col + sample_size_half >= self._current_frame.shape[1]:
+                        continue
+
+                    # sample 32x32 and test classifier
+                    sample = self._current_frame[row - sample_size_half:row + sample_size_half, col - sample_size_half:col + sample_size_half]
+
+                    # Apply transformations to the image
+                    image_transformed = self._transform(sample)
+                    image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
+
+                    # update the label that we run the classifier
+                    task_label['text'] = "Running classifier on frame {}...".format(i)
+
+                    # Pass the transformed image to the model
+                    output = self._classifier_model(image_transformed)
+
+                    if output > self._classification_threshold:
+                        positives.append((output, (col, row)))
             
             if positives:
                 # sort by output
@@ -334,9 +426,9 @@ class MainWindow(tk.Tk):
                 # take the first one
                 (_, coordinates) = positives[0]
 
-                self._fish_tracking[i] = coordinates
+                self._fish_tracking[frame_id] = coordinates
 
-            self.track_bar.mark_processed(i)
+                self.track_bar.mark_processed(frame_id)
 
             self.update()
 
@@ -346,6 +438,7 @@ class MainWindow(tk.Tk):
         task_window.destroy()
 
         self.wait_window(task_window)
+        self.update_gui()
     
     def _set_track_start(self):
         self.track_bar.mark_processing_start(self.slider.get())
@@ -541,11 +634,6 @@ class MainWindow(tk.Tk):
     def _play_frame(self, frame):
         self._set_frame(frame)
         self._reload_frame()
-
-        if self._calibrated:
-            self._track_frame()
-            self.track_bar.mark_processed(frame)
-
         self.update_gui()
 
     def _read_frames(self):
@@ -576,7 +664,24 @@ class MainWindow(tk.Tk):
         # draw screen points
         for point in self._screen_points:
             image = cv2.circle(image, point, 5, (0, 0, 255), -1)
+        
+        # draw tracking if present
+        frame_id = self._get_current_frame_number()
+        if frame_id in self._fish_tracking:
+            (x, y) = self._fish_tracking[frame_id]
+            image = cv2.circle(image, (y, x), 16, (0, 255, 0))
 
+        if self._draw_trajectory.get() and len(self._fish_tracking) > 1:
+            trajectory = list(map(lambda x: self._fish_tracking[x], self._fish_tracking.keys()))
+            s_trajectory = smoothTrajectory(trajectory, self._trajectory_smooth_size)
+            travelDistance = trajectoryLength(s_trajectory) * self._pixel_to_cm_ratio
+
+            # update the travel distance status bar
+            self.distance_status_bar['text'] = "Distance: {} cm".format(travelDistance)
+
+            # draw the trajectory
+            image = drawTrajectory(image, s_trajectory)
+        
         # Convert the image from OpenCV to PIL format
         image = Image.fromarray(image)
 
