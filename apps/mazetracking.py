@@ -23,7 +23,7 @@ from tkinter import ttk
 from moviepy.editor import VideoFileClip
 
 from mazecalibration import MazeCalibration
-from motiondetection import MotionDetector
+from maze.motiondetection import MotionDetector
 
 from trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 
@@ -115,25 +115,25 @@ class MainWindow(tk.Tk):
         self._calibrated = False
         self._calibration_running = False
         self._pixel_to_cm_ratio = 1.0  # default to 1.0
+        self._first_frame_position = None
 
         # drawing variable
         self._draw_trajectory = tk.BooleanVar()
         self._draw_trajectory.set(False)
 
-
         self._fish_tracking = {}
         self._trajectory_smooth_size = 11
 
-        self._classification_threshold = 0.85
+        self._classification_threshold = 0.9
         self._classifier_model = None
 
         # classifier transformations 
         self._transform = transforms.Compose([
             transforms.ToPILImage(),  # Convert np array to PIL Image
             transforms.ToTensor(),  # Convert PIL Image to PyTorch tensor
+            transforms.Grayscale(num_output_channels=3),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize with ImageNet mean and std
         ])
-
 
         # screen points for calibration and other purposes
         self._screen_points = []
@@ -142,7 +142,7 @@ class MainWindow(tk.Tk):
         self._maze_calibration = MazeCalibration("data/calibration.xml")
 
         # motion detector
-        self._motion_detector = MotionDetector(0.03, 12) # threshold and block size
+        self._motion_detector = MotionDetector(10, 3, 15, 400, 3000)
 
         self.dialog_window = tk.Toplevel(self)
         self.dialog_window.withdraw()
@@ -199,10 +199,10 @@ class MainWindow(tk.Tk):
         self.calibration_button = tk.Button(self.right_frame, text="Calibrate", command=self._calibrate, fg="red")
         self.calibration_button.pack(side=tk.LEFT)
 
-        self.set_track_start_button = tk.Button(self.right_frame, text="Set Track Start", command=self._set_track_start)
+        self.set_track_start_button = tk.Button(self.right_frame, text="Set Track Start", command=self._set_track_start, state=tk.DISABLED)
         self.set_track_start_button.pack(side=tk.LEFT)
 
-        self.set_track_end_button = tk.Button(self.right_frame, text="Set Track End", command=self._set_track_end)
+        self.set_track_end_button = tk.Button(self.right_frame, text="Set Track End", command=self._set_track_end, state=tk.DISABLED)
         self.set_track_end_button.pack(side=tk.LEFT)
 
         self.run_tracking_button = tk.Button(self.right_frame, text="Run Tracking", command=self._run_tracking, state=tk.DISABLED)
@@ -215,7 +215,7 @@ class MainWindow(tk.Tk):
         self.clear_tracking_frame_button .pack(side=tk.LEFT)
 
         self.motion_threshold_scale = tk.Scale(self.right_frame, from_=0.0, to=0.3, resolution=0.01, orient=tk.HORIZONTAL, command=self._motion_threshold_changed)
-        self.motion_threshold_scale.set(0.03)
+        self.motion_threshold_scale.set(0.05)
         self.motion_threshold_scale.pack(side=tk.LEFT)
 
         self.draw_trajectory_checkbox = tk.Checkbutton(self.right_frame, text="Draw Trajectory", variable=self._draw_trajectory)
@@ -280,16 +280,6 @@ class MainWindow(tk.Tk):
         self.status_bar['text'] = "Classifier model loaded."
         self.status_bar['fg'] = "green"
     
-    def _sample_motion(self, motion):
-        # sort motion from 2d blocks into a series with (row, column) coordinates
-        motion_samples = []
-        for r in range(0, motion.shape[0]):
-            for c in range(0, motion.shape[1]):
-                if motion[r, c] > 0:
-                    motion_samples.append((r, c))
-        
-        return motion_samples
-
     def _run_tracking(self):
         if self._classifier_model is None:
             messagebox.showerror("Error", "Please load a classifier model first.")
@@ -302,19 +292,15 @@ class MainWindow(tk.Tk):
         # Create a new window
         task_window = tk.Toplevel(self)
         task_window.title("Tracking")
-        task_window.geometry("300x150")
+        task_window.geometry("300x100")
 
         # label showing the current frame
-        frame_label = tk.Label(task_window, text="Frame: 0")
-        frame_label.pack()
+        progress_label = tk.Label(task_window, text="Progress: 0%")
+        progress_label.pack()
 
         # Create a progress bar
         progress = ttk.Progressbar(task_window, length=200)
         progress.pack(pady=20)
-
-        # label describing the task
-        task_label = tk.Label(task_window, text="Tracking fish in the maze...")
-        task_label.pack()
 
         # Create a cancel button
         cancel_button = tk.Button(task_window, text="Cancel", command=task_window.destroy)
@@ -334,7 +320,6 @@ class MainWindow(tk.Tk):
 
         for frame_id in range(track_start_frame, track_end_frame):
             # update the label
-            frame_label['text'] = "Frame: {}".format(frame_id)
 
             if frame_id == 0 or frame_id == self._num_frames:
                 # we need the previous and the next frame to perform tracking, so just skip the first and last frame
@@ -343,92 +328,71 @@ class MainWindow(tk.Tk):
             progress_value = progress_value + progress_increment
             progress['value'] = progress_value
 
-            # update the label that we detect motion
-            task_label['text'] = "Detecting motion in frame {}...".format(frame_id)
+            progress_label['text'] = "Progress: {}%".format(int(progress_value))
 
             # positive hits, potential fish locations
             positives = []
 
-            if frame_id - 1 in self._fish_tracking:
-                # we already have the previous frame tracked, so we can just use that as the starting point
-                # we search around it for the fish
-                (col, row) = self._fish_tracking[frame_id - 1]
+            prev_frame_image = self._read_frame(frame_id-1)
+            frame_image = self._read_frame(frame_id)
+            next_frame_image = self._read_frame(frame_id+1)
 
-                step_size = 4  # we step left, right, up, down for every step size
-                search_area = 64  # we search for this area size
+            # turn to RGB
+            prev_frame_image = cv2.cvtColor(prev_frame_image, cv2.COLOR_BGR2RGB)
+            frame_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
+            next_frame_image = cv2.cvtColor(next_frame_image, cv2.COLOR_BGR2RGB)
 
-                for i in range (-search_area // 2, search_area // 2, step_size):
-                    for j in range (-search_area // 2, search_area // 2, step_size):
+            draw_image = frame_image.copy()
 
-                        row_new = row + i
-                        col_new = col + j
+            # perform tracking
+            good_contours, bad_contours = self._motion_detector(prev_frame_image, frame_image, next_frame_image)
 
-                        if row_new - sample_size_half < 0 or row_new + sample_size_half >= self._current_frame.shape[0]:
-                            continue
-                    
-                        if col_new - sample_size_half < 0 or col_new + sample_size_half >= self._current_frame.shape[1]:
-                            continue
+            # draw contours
+            cv2.drawContours(draw_image, good_contours, -1, (0, 255, 0), 2)
+            cv2.drawContours(draw_image, bad_contours, -1, (0, 0, 255), 2)
 
-                        # sample 32x32 and test classifier
-                        sample = self._current_frame[row_new - sample_size_half:row_new + sample_size_half, col_new - sample_size_half:col_new + sample_size_half]
 
-                        # Apply transformations to the image
-                        image_transformed = self._transform(sample)
-                        image_transformed = image_transformed.unsqueeze(0)
 
-                        # update the label that we run the classifier
-                        task_label['text'] = "Running classifier on frame {}...".format(i)
+            for contour in good_contours:
+                # find center of the contour
+                M = cv2.moments(contour)
+                x = int(M['m10']/M['m00'])
+                y = int(M['m01']/M['m00'])
 
-                        # Pass the transformed image to the model
-                        output = self._classifier_model(image_transformed)
+                # given sample size, check if ROI is within the frame
+                if x - sample_size_half < 0 or x + sample_size_half >= frame_image.shape[1] or y - sample_size_half < 0 or y + sample_size_half >= frame_image.shape[0]:
+                    continue
 
-                        if output > self._classification_threshold:
-                            positives.append((output, (col_new, row_new)))
-            else:
-                # perform tracking
-                motion = self._motion_detector.detect(self._read_frame(frame_id - 1), self._read_frame(frame_id))
+                # sample 32x32 and test classifier
+                sample = self._current_frame[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
 
-                # sample motion and test classifier
-                for (i, j) in self._sample_motion(motion):
-                    
-                    block_size = self._motion_detector.block_size
-                    block_half = self._motion_detector.block_size // 2
+                # Apply transformations to the image
+                image_transformed = self._transform(sample)
+                image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
 
-                    row = i * block_size + block_half
-                    col = j * block_size + block_half
+                # Pass the transformed image to the model
+                output = self._classifier_model(image_transformed)
 
-                    if row - sample_size_half < 0 or row + sample_size_half >= self._current_frame.shape[0]:
-                        continue
-                
-                    if col - sample_size_half < 0 or col + sample_size_half >= self._current_frame.shape[1]:
-                        continue
-
-                    # sample 32x32 and test classifier
-                    sample = self._current_frame[row - sample_size_half:row + sample_size_half, col - sample_size_half:col + sample_size_half]
-
-                    # Apply transformations to the image
-                    image_transformed = self._transform(sample)
-                    image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
-
-                    # update the label that we run the classifier
-                    task_label['text'] = "Running classifier on frame {}...".format(i)
-
-                    # Pass the transformed image to the model
-                    output = self._classifier_model(image_transformed)
-
-                    if output > self._classification_threshold:
-                        positives.append((output, (col, row)))
+                # print output weight
+                if output > self._classification_threshold:
+                    positives.append((output, contour, (x, y)))
             
             if positives:
                 # sort by output
                 positives.sort(key=lambda x: x[0], reverse=True)
 
                 # take the first one
-                (_, coordinates) = positives[0]
+                (output, contour, coordinates) = positives[0]
 
-                self._fish_tracking[frame_id] = coordinates
+                self._fish_tracking[frame_id] = (contour, coordinates)
 
                 self.track_bar.mark_processed(frame_id)
+
+                # draw coordinates on our draw_image
+                cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
+
+            cv2.imshow("debug", draw_image)
+            cv2.waitKey(1)
 
             self.update()
 
@@ -437,7 +401,11 @@ class MainWindow(tk.Tk):
         task_window.grab_set()
         task_window.destroy()
 
-        self.wait_window(task_window)
+        try:
+            self.wait_window(task_window)
+        except:
+            pass
+
         self.update_gui()
     
     def _set_track_start(self):
@@ -550,7 +518,10 @@ class MainWindow(tk.Tk):
             self.calibration_button['text'] = "Reset Calibration"
             self.calibration_button['fg'] = "green"
 
+            self.set_track_start_button["state"] = tk.NORMAL
+            self.set_track_end_button["state"] = tk.NORMAL
             self.run_tracking_button["state"] = tk.NORMAL
+
         except Exception as e:
             self._calibrated = False
             self._calibration_running = False
@@ -601,6 +572,7 @@ class MainWindow(tk.Tk):
         frame = self.clip.get_frame(float(frame_number) / float(self.clip.fps))
         if self._calibrated:
             frame = self._maze_calibration.rectify_image(frame)
+
         return frame
 
     def _read_current_frame(self):
@@ -668,11 +640,23 @@ class MainWindow(tk.Tk):
         # draw tracking if present
         frame_id = self._get_current_frame_number()
         if frame_id in self._fish_tracking:
-            (x, y) = self._fish_tracking[frame_id]
-            image = cv2.circle(image, (y, x), 16, (0, 255, 0))
+            (contour, (x, y)) = self._fish_tracking[frame_id]
+            image = cv2.circle(image, (x, y), 12, (0, 255, 0))
+
+            # draw contour
+            image = cv2.drawContours(image, [contour], -1, (0, 255, 0), 2)
 
         if self._draw_trajectory.get() and len(self._fish_tracking) > 1:
-            trajectory = list(map(lambda x: self._fish_tracking[x], self._fish_tracking.keys()))
+            # take trajectory up to this frame
+            trajectory = []
+            tracked_frames = sorted(list(self._fish_tracking.keys()))
+            for frame_id in tracked_frames:
+                if frame_id >= self._get_current_frame_number():
+                    break
+
+                (contour, ptn) = self._fish_tracking[frame_id]
+                trajectory.append(ptn) 
+            
             s_trajectory = smoothTrajectory(trajectory, self._trajectory_smooth_size)
             travelDistance = trajectoryLength(s_trajectory) * self._pixel_to_cm_ratio
 
