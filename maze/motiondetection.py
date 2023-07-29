@@ -18,9 +18,7 @@ class MotionDetector:
         self.min_area = min_area
         self.max_area = max_area
 
-    def __call__(self, prev_frame, this_frame):
-        image_size = (this_frame.shape[1], this_frame.shape[0])
-
+    def detect(self, prev_frame, this_frame):
         # turn to grayspace
         gprev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
         gframe = cv2.cvtColor(this_frame, cv2.COLOR_BGR2GRAY)
@@ -51,9 +49,7 @@ class MotionDetector:
 
         return good_contours, bad_contours
 
-    def __call__(self, prev_frame, this_frame, next_frame):
-        image_size = (this_frame.shape[1], this_frame.shape[0])
-
+    def detect2(self, prev_frame, this_frame, next_frame):
         # turn to grayspace
         gprev_frame = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
         gframe = cv2.cvtColor(this_frame, cv2.COLOR_BGR2GRAY)
@@ -73,11 +69,8 @@ class MotionDetector:
         dst = cv2.erode(dst, cv2.getStructuringElement(cv2.MORPH_RECT, (self.erode_kernel_size, self.erode_kernel_size)))
         dst = cv2.dilate(dst, cv2.getStructuringElement(cv2.MORPH_RECT, (self.dilate_kernel_size, self.dilate_kernel_size)))
 
-        #cv2.imshow("distance", dst)
-        #cv2.waitKey(1)
-
         dst = cv2.GaussianBlur(dst, (19, 19), 5.0)
-        _, dst = cv2.threshold(dst, 100, 255, cv2.THRESH_BINARY)
+        _, dst = cv2.threshold(dst, 50, 255, cv2.THRESH_BINARY)
 
         contours, _ = cv2.findContours(dst, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 

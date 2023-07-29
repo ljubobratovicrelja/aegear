@@ -16,9 +16,9 @@ import maze.motiondetection as md
 # scripts setup
 
 sampleVideoPath = "data/videos/"
-videoFiles = ["K9", "E7"]
+videoFiles = ["E7", "E11", "EE1", "EE3", "EE4", "K9", "S1"]
 
-skipFrames = 20
+skipFrames = 10
 
 trainingOutput = "data/training"
 
@@ -107,10 +107,6 @@ def onMouse(event, x, y, flags, param):
         return
 
     print("Inlier samples: {}, Outlier Samples: {}".format(numInliers, numOutliers))
-    #frame_draw = frame.copy()
-    #frame_draw = cv2.circle(frame_draw, trackingPoint, sx2, [255, 0, 0])
-    #cv2.imshow(winTitle, frame_draw)
-
 
 videoIndex = 0
 
@@ -155,7 +151,7 @@ while True:
         nextFrame = cv2.cvtColor(nextFrame, cv2.COLOR_RGB2BGR)
 
         # calculate motion
-        good_contours, bad_contours = motion_detector(prevFrame, frame, nextFrame)
+        good_contours, bad_contours = motion_detector.detect2(prevFrame, frame, nextFrame)
 
         # draw contours
         frame_draw = frame.copy()

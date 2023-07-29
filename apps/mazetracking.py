@@ -60,6 +60,11 @@ class TrackingBar(tk.Canvas):
                                 (frame_number + 1) * self.frame_width, self.winfo_reqheight(),
                                 fill='purple', width=5, tags="processing_start")
     
+    def unmark_processing_start(self):
+        if self.processing_start is not None:
+            self.delete("processing_start")
+            self.processing_start = None
+    
     def mark_processing_end(self, frame_number):
         # check if start is after end
         if self.processing_start is not None and self.processing_start > frame_number:
@@ -75,6 +80,11 @@ class TrackingBar(tk.Canvas):
         self.create_rectangle(frame_number * self.frame_width, 0,
                                 (frame_number + 1) * self.frame_width, self.winfo_reqheight(),
                                 fill='purple', width=5, tags="processing_end")
+    
+    def unmark_processing_end(self):
+        if self.processing_end is not None:
+            self.delete("processing_end")
+            self.processing_end = None
 
     def mark_processed(self, frame_number):
         if frame_number not in self.processed_frames:
@@ -119,12 +129,13 @@ class MainWindow(tk.Tk):
 
         # drawing variable
         self._draw_trajectory = tk.BooleanVar()
-        self._draw_trajectory.set(False)
+        self._draw_trajectory.set(True)
 
         self._fish_tracking = {}
-        self._trajectory_smooth_size = 11
+        self._trajectory_smooth_size = 9
+        self._trajectory_frame_skip = 3
 
-        self._classification_threshold = 0.9
+        self._classification_threshold = 0.99  # we can expect classifier to be very confident
         self._classifier_model = None
 
         # classifier transformations 
@@ -142,7 +153,7 @@ class MainWindow(tk.Tk):
         self._maze_calibration = MazeCalibration("data/calibration.xml")
 
         # motion detector
-        self._motion_detector = MotionDetector(10, 3, 15, 400, 3000)
+        self._motion_detector = MotionDetector(10, 3, 15, 800, 2500)
 
         self.dialog_window = tk.Toplevel(self)
         self.dialog_window.withdraw()
@@ -152,8 +163,9 @@ class MainWindow(tk.Tk):
         #### DEBUG PART ######
         #initial_video = filedialog.askopenfilename(parent=self.dialog_window)
         initial_video = "data/videos/K9.MOV"
+        #initial_video = "data/videos/EE1.MOV"
 
-        self._classifier_model = torch.load("data/model_cnn4.pth")
+        self._classifier_model = torch.load("data/model_cnn4_v2.pth")
         self._classifier_model.to("cpu")
 
         self._classifier_model.eval()
@@ -211,12 +223,15 @@ class MainWindow(tk.Tk):
         self.reset_tracking_button = tk.Button(self.right_frame, text="Reset Tracking", command=self._reset_tracking)
         self.reset_tracking_button.pack(side=tk.LEFT)
 
-        self.clear_tracking_frame_button = tk.Button(self.right_frame, text="Clear Frame Track", command=self._clear_tracking_frame)
-        self.clear_tracking_frame_button .pack(side=tk.LEFT)
+        # scale for trajectory smoothing
+        self.smooth_trajectory_scale = tk.Scale(self.right_frame, from_=1, to=100, orient=tk.HORIZONTAL, label="Trajectory Smoothing", command=self._trajectory_smooth_size_changed)
+        self.smooth_trajectory_scale.set(self._trajectory_smooth_size)
+        self.smooth_trajectory_scale.pack(side=tk.LEFT)
 
-        self.motion_threshold_scale = tk.Scale(self.right_frame, from_=0.0, to=0.3, resolution=0.01, orient=tk.HORIZONTAL, command=self._motion_threshold_changed)
-        self.motion_threshold_scale.set(0.05)
-        self.motion_threshold_scale.pack(side=tk.LEFT)
+        # scale for tracking every nth frame
+        self.tracking_frame_scale = tk.Scale(self.right_frame, from_=1, to=100, orient=tk.HORIZONTAL, label="Tracking Frame Skip", command=self._trajectory_frame_skip_changed)
+        self.tracking_frame_scale.set(self._trajectory_frame_skip)
+        self.tracking_frame_scale.pack(side=tk.LEFT)
 
         self.draw_trajectory_checkbox = tk.Checkbutton(self.right_frame, text="Draw Trajectory", variable=self._draw_trajectory)
         self.draw_trajectory_checkbox.pack(side=tk.LEFT)
@@ -265,6 +280,21 @@ class MainWindow(tk.Tk):
 
         self.deiconify()
     
+    def _trajectory_smooth_size_changed(self, value):
+        v = int(value)
+        # enforce odd number
+        if v % 2 == 0:
+            v += 1
+        
+        self._trajectory_smooth_size = v
+
+        # set the value to gui
+        self.smooth_trajectory_scale.set(v)
+
+    def _trajectory_frame_skip_changed(self, value):
+        v = int(value)
+        self._trajectory_frame_skip = v
+        
     def _load_classifier(self):
         model_path = filedialog.askopenfilename()
         if model_path == "":
@@ -292,7 +322,7 @@ class MainWindow(tk.Tk):
         # Create a new window
         task_window = tk.Toplevel(self)
         task_window.title("Tracking")
-        task_window.geometry("300x100")
+        task_window.geometry("300x120")
 
         # label showing the current frame
         progress_label = tk.Label(task_window, text="Progress: 0%")
@@ -311,14 +341,17 @@ class MainWindow(tk.Tk):
         track_start_frame = self.track_bar.processing_start
         track_end_frame = self.track_bar.processing_end
 
-        progress_increment = 100.0 / (track_end_frame - track_start_frame)
+        progress_increment = 100.0 / ((track_end_frame - track_start_frame) / self._trajectory_frame_skip)
         progress_value = 0.0
 
         # size of the classifiers window
         sample_size = 32
         sample_size_half = sample_size // 2
 
-        for frame_id in range(track_start_frame, track_end_frame):
+        # measure estimated time as well
+        start_time = time.time()
+
+        for frame_id in range(track_start_frame, track_end_frame, self._trajectory_frame_skip):
             # update the label
 
             if frame_id == 0 or frame_id == self._num_frames:
@@ -328,30 +361,35 @@ class MainWindow(tk.Tk):
             progress_value = progress_value + progress_increment
             progress['value'] = progress_value
 
-            progress_label['text'] = "Progress: {}%".format(int(progress_value))
+            # calculate the estimated time
+            elapsed_time = time.time() - start_time
+            estimated_time = elapsed_time / progress_value * 100.0 - elapsed_time
+
+            # write estimated time in ss:mm:hh format
+            estimated_time_str = "{:02d}:{:02d}:{:02d}".format(int(estimated_time // 3600), int((estimated_time // 60) % 60), int(estimated_time % 60))
+
+            progress_label['text'] = "Progress: {}%, estimated time: {}".format(int(progress_value), estimated_time_str)
 
             # positive hits, potential fish locations
             positives = []
 
             prev_frame_image = self._read_frame(frame_id-1)
             frame_image = self._read_frame(frame_id)
-            next_frame_image = self._read_frame(frame_id+1)
+            next_frame_image = self._read_frame(frame_id)
+
+            draw_image = frame_image.copy()
 
             # turn to RGB
             prev_frame_image = cv2.cvtColor(prev_frame_image, cv2.COLOR_BGR2RGB)
             frame_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
             next_frame_image = cv2.cvtColor(next_frame_image, cv2.COLOR_BGR2RGB)
 
-            draw_image = frame_image.copy()
-
             # perform tracking
-            good_contours, bad_contours = self._motion_detector(prev_frame_image, frame_image, next_frame_image)
+            good_contours, bad_contours = self._motion_detector.detect2(prev_frame_image, frame_image, next_frame_image)
 
             # draw contours
             cv2.drawContours(draw_image, good_contours, -1, (0, 255, 0), 2)
             cv2.drawContours(draw_image, bad_contours, -1, (0, 0, 255), 2)
-
-
 
             for contour in good_contours:
                 # find center of the contour
@@ -359,12 +397,15 @@ class MainWindow(tk.Tk):
                 x = int(M['m10']/M['m00'])
                 y = int(M['m01']/M['m00'])
 
+                # draw center
+                draw_image = cv2.circle(draw_image, (x, y), 5, (0, 255, 0), -1)
+
                 # given sample size, check if ROI is within the frame
                 if x - sample_size_half < 0 or x + sample_size_half >= frame_image.shape[1] or y - sample_size_half < 0 or y + sample_size_half >= frame_image.shape[0]:
                     continue
 
                 # sample 32x32 and test classifier
-                sample = self._current_frame[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
+                sample = frame_image[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
 
                 # Apply transformations to the image
                 image_transformed = self._transform(sample)
@@ -391,8 +432,12 @@ class MainWindow(tk.Tk):
                 # draw coordinates on our draw_image
                 cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
 
-            cv2.imshow("debug", draw_image)
-            cv2.waitKey(1)
+            #cv2.imshow("debug", draw_image)
+            #cv2.waitKey(1)
+
+            # update the image
+            self._display_image = draw_image.copy()
+            self.update_image(self._display_image)
 
             self.update()
 
@@ -406,7 +451,8 @@ class MainWindow(tk.Tk):
         except:
             pass
 
-        self.update_gui()
+        # go to start frame
+        self._play_frame(track_start_frame)
     
     def _set_track_start(self):
         self.track_bar.mark_processing_start(self.slider.get())
@@ -414,14 +460,16 @@ class MainWindow(tk.Tk):
     def _set_track_end(self):
         self.track_bar.mark_processing_end(self.slider.get())
 
-    def _motion_threshold_changed(self, value):
-        self._motion_detector.threshold = float(value)
-
     def _reset_tracking(self):
         self.track_bar.clear()
-    
-    def _clear_tracking_frame(self):
-        self.track_bar.mark_not_processed(self.slider.get())
+        self._fish_tracking = {}
+
+        # also reset start and end
+        self.track_bar.unmark_processing_start()
+        self.track_bar.unmark_processing_end()
+
+        # update gui
+        self.update_gui()
     
     def _about(self):
         messagebox.showinfo("About", "Maze Tracking\n\nAuthor: Relja Ljubobratovic\nEmail: ljubobratovic.relja@gmail.com")

@@ -56,15 +56,17 @@ def drawTrajectory(frame, trajectory, thickness=1):
 
     dframe = np.copy(frame)
     prev = trajectory[0]
+    num_points = len(trajectory)
 
     intensityIncrement = 1.0 / len(trajectory)
 
     for i, p in enumerate(trajectory[1:]):
         # calculate color
-        h = 29 + int(150.0 * (i * intensityIncrement))
+        #h = 29 + int(150.0 * (i * intensityIncrement))
+        h = int(150.0 * ((num_points - i) * intensityIncrement))
         s = 255
         v = 255
-        bgr = cv2.cvtColor(np.array([[[h, s, v]]], dtype=np.uint8), cv2.COLOR_HSV2BGR)
+        bgr = cv2.cvtColor(np.array([[[h, s, v]]], dtype=np.uint8), cv2.COLOR_HSV2RGB)
         color = bgr[0, 0]
         color = (int(color[0]), int(color[1]), int(color[2]))
 
