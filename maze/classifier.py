@@ -1,6 +1,4 @@
 """
-Created on Mon Apr  6 15:40:00 2020
-
 This file contains the classifier model for the project. It is a simple CNN
 with 3 convolutional layers and 2 fully connected layers. The output is a
 single value between 0 and 1, where 0 means no motion and 1 means motion.
