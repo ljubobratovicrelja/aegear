@@ -23,9 +23,6 @@ class MazeCalibration:
             Path to the calibration file.
         """
         self.mtx, self.dist = self._load_calibration(calibration_path)
-        self._pts = []
-        self._image = None
-        self._winName = "Select 4 points"
         self._perspectiveTransform = None
 
     def _load_calibration(self, calibration_path):
@@ -36,20 +33,15 @@ class MazeCalibration:
 
         return (mtx, dist)
 
-    def _select_points(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            self._pts.append((x, y))
-
-
     
-    def calibrate(self, image):
+    def calibrate(self, screen_pts):
         """
         Run the maze characterization.
         
         Parameters
         ----------
-        image : np.ndarray
-            The image to run the maze characterization on.
+        screen_pts : list
+            The screen points to use for calibration.
         
         Returns
         -------
@@ -57,30 +49,12 @@ class MazeCalibration:
             The pixel to cm ratio.
 
         """
-        self._image = image.copy()  # update the image and then run the point clicking
-
-        # undistort the image
-        self._image = cv2.undistort(self._image, self.mtx, self.dist)
-
-        cv2.namedWindow(self._winName)
-        cv2.setMouseCallback(self._winName, self._select_points)
-
-        while(True):
-            if len(self._pts) == 4 or cv2.waitKey(20) & 0xFF == 27:  # Exit if ESC key is pressed or we have 4 points
-                break
-
-            dimage = self._image.copy()
-            for pt in self._pts:
-                dimage = cv2.circle(dimage, pt, 5, (0, 255, 0))
-            cv2.imshow(self._winName, dimage)
-        
-        assert len(self._pts) == 4, "Need 4 points to calculate pixel to cm ratio"
 
         # -------------------
         # calcualte pixel to cm ratio and perspective transform
         # -------------------
 
-        sample_pts = np.array(self._pts, dtype=np.float32)
+        sample_pts = np.array(screen_pts, dtype=np.float32)
 
         img_scaling_factor = (sample_pts[1, 0] - sample_pts[0, 0]) / (
             MazeCalibration.REAL_PTS[1, 0] - MazeCalibration.REAL_PTS[0, 0]
@@ -105,8 +79,6 @@ class MazeCalibration:
         pixel_to_cm_ratio = np.linalg.norm(MazeCalibration.REAL_PTS[1, :] - MazeCalibration.REAL_PTS[0, :]) / np.linalg.norm(
             sample_pts[1, :] - sample_pts[0, :]
         )
-
-        cv2.destroyWindow(self._winName)
 
         self._perspectiveTransform = persp_T
 

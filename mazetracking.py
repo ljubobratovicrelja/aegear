@@ -26,10 +26,10 @@ from tkinter import ttk
 
 from moviepy.editor import VideoFileClip
 
-from mazecalibration import MazeCalibration
+from maze.mazecalibration import MazeCalibration
 from maze.motiondetection import MotionDetector
 
-from trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
+from maze.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 
 # needed for the classifier loading
 import maze.classifier
