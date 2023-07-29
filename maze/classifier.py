@@ -1,24 +1,7 @@
 """
 This file contains the classifier model for the project. It is a simple CNN
 with 3 convolutional layers and 2 fully connected layers. The output is a
-single value between 0 and 1, where 0 means no motion and 1 means motion.
-
-The model is trained on the dataset in the data folder. The dataset contains
-images of size 32x32. The images are divided into two folders, one for motion
-and one for no motion. The images are named as follows:
-    - motion_0.png
-    - motion_1.png
-    - ...
-    - motion_999.png
-    - no_motion_0.png
-    - no_motion_1.png
-    - ...
-    - no_motion_999.png
-
-The model is trained on 80% of the images and tested on the remaining 20%.
-
-The model is trained using the Adam optimizer and the binary cross entropy
-loss function. The model is trained for 150 epochs with a batch size of 64.
+single value between 0 and 1, where 0 means background and 1 means fish.
 """
 import torch
 import torch.nn as nn
