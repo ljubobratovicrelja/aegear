@@ -1,7 +1,11 @@
 import sys
 
-# add the current directory to the path for maze modules
-sys.path.append(".")
+# get path to this module
+import os
+this_dir = os.path.dirname(os.path.abspath(__file__))
+
+# add parent directory to path
+sys.path.append(os.path.dirname(this_dir))
 
 import threading
 import time
@@ -161,11 +165,11 @@ class MainWindow(tk.Tk):
         self.dialog_window.title("Load Video")
 
         #### DEBUG PART ######
-        #initial_video = filedialog.askopenfilename(parent=self.dialog_window)
-        initial_video = "data/videos/K9.MOV"
+        initial_video = filedialog.askopenfilename(parent=self.dialog_window)
+        #initial_video = "data/videos/K9.MOV"
         #initial_video = "data/videos/EE1.MOV"
 
-        self._classifier_model = torch.load("data/model_cnn4_v2.pth")
+        self._classifier_model = torch.load("data/models/model_cnn4_v2.pth")
         self._classifier_model.to("cpu")
 
         self._classifier_model.eval()
