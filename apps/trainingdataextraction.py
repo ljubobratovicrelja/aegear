@@ -43,8 +43,6 @@ if os.path.exists("{}/training.json".format(trainingOutput)):
     with open("{}/training.json".format(trainingOutput), "r") as f:
         training_package = json.load(f)
 
-print("Training package: {}".format(training_package))
-
 # motion detection module
 motion_detector = md.MotionDetector(10, 3, 15, 400, 3000)
 
@@ -115,6 +113,11 @@ while True:
     videoFile = videoFiles[videoIndex]
 
     videoPath = sampleVideoPath + videoFile + ".MOV"
+
+    if os.path.exists(videoPath) is False:
+        print("Video file {} does not exist".format(videoPath))
+        videoIndex = videoIndex + 1
+        continue
 
     # initiate the dictionaries
     if videoFile not in training_package["background"]:
