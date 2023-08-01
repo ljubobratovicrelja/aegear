@@ -30,6 +30,7 @@ from maze.mazecalibration import MazeCalibration
 from maze.motiondetection import MotionDetector
 
 from maze.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
+from maze.utils import ToolTip
 
 # needed for the classifier loading
 import maze.classifier
@@ -113,6 +114,9 @@ class TrackingBar(tk.Canvas):
         return frame_number in self.processed_frames
 
 class MainWindow(tk.Tk):
+
+    ONE_LINE_HEIGHT = 16
+
     def __init__(self):
         super(MainWindow, self).__init__()
 
@@ -134,6 +138,10 @@ class MainWindow(tk.Tk):
         # drawing variable
         self._draw_trajectory = tk.BooleanVar()
         self._draw_trajectory.set(True)
+
+        self._tracking_crosscheck = tk.BooleanVar()
+        self._tracking_crosscheck.set(True)
+
 
         self._fish_tracking = {}
         self._trajectory_smooth_size = 9
@@ -169,7 +177,7 @@ class MainWindow(tk.Tk):
         #initial_video = "data/videos/K9.MOV"
         #initial_video = "data/videos/EE1.MOV"
 
-        self._classifier_model = torch.load("data/models/model_cnn4_v2.pth")
+        self._classifier_model = torch.load("data/models/model_cnn4_v3.pth")
         self._classifier_model.to("cpu")
 
         self._classifier_model.eval()
@@ -199,7 +207,24 @@ class MainWindow(tk.Tk):
 
         # Create a label to hold the image
         self.image_label = tk.Label(self.center_frame, cursor="cross")
-        self.image_label.pack()
+        self.image_label.grid(row=0, column=0)
+
+        # scrollbar for the listbox
+        self.scrollbar = tk.Scrollbar(self.center_frame, orient=tk.VERTICAL)
+        self.scrollbar.grid(row=0, column=2, sticky=tk.N + tk.S)
+
+        # Create a listbox for all tracked frames
+        self.tracking_listbox = tk.Listbox(self.center_frame, width=20, height=10, yscrollcommand=self.scrollbar.set)
+        self.tracking_listbox.grid(row=0, column=1)
+
+        # add item select callback
+        self.tracking_listbox.bind('<<ListboxSelect>>', self._listbox_item_selected)
+
+        # add del key callback
+        self.tracking_listbox.bind('<Delete>', self._listbox_item_deleted)
+
+        # configure the scrollbar
+        self.scrollbar.config(command=self.tracking_listbox.yview)
 
         self._load_first_frame()
 
@@ -224,8 +249,22 @@ class MainWindow(tk.Tk):
         self.run_tracking_button = tk.Button(self.right_frame, text="Run Tracking", command=self._run_tracking, state=tk.DISABLED)
         self.run_tracking_button.pack(side=tk.LEFT)
 
+        # checkbox for tracking crosschecking
+        self.crosscheck_checkbox = tk.Checkbutton(self.right_frame, text="Crosscheck", variable=self._tracking_crosscheck)
+        self.crosscheck_checkbox.pack(side=tk.LEFT)
+
+        # set tooltip for crosscheck checkbox
+        self.chrosscheck_tooltip = ToolTip(self.crosscheck_checkbox, "This runs classification on mutliple consecutive frames to ensure that the fish is correctly identified.")
+        self.crosscheck_checkbox.bind("<Enter>", self.chrosscheck_tooltip.display_tooltip)
+        self.crosscheck_checkbox.bind("<Leave>", self.chrosscheck_tooltip.hide_tooltip)
+
         self.reset_tracking_button = tk.Button(self.right_frame, text="Reset Tracking", command=self._reset_tracking)
         self.reset_tracking_button.pack(side=tk.LEFT)
+
+        # scale for classification threshold
+        self.classification_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100, orient=tk.HORIZONTAL, label="Classification Threshold", command=self._classification_threshold_changed)
+        self.classification_threshold_scale.set(self._classification_threshold * 100)
+        self.classification_threshold_scale.pack(side=tk.LEFT)
 
         # scale for trajectory smoothing
         self.smooth_trajectory_scale = tk.Scale(self.right_frame, from_=1, to=100, orient=tk.HORIZONTAL, label="Trajectory Smoothing", command=self._trajectory_smooth_size_changed)
@@ -284,6 +323,31 @@ class MainWindow(tk.Tk):
 
         self.deiconify()
     
+    def _listbox_item_selected(self, event):
+        item_selected = self.tracking_listbox.curselection()[0]
+
+        # get list item
+        frame_id = int(self.tracking_listbox.get(item_selected).split(":")[0])
+
+        self._set_frame(frame_id)
+        self.update_gui()
+    
+    def _listbox_item_deleted(self, event):
+        item_selected = self.tracking_listbox.curselection()[0]
+
+        # get list item
+        frame_id = int(self.tracking_listbox.get(item_selected).split(":")[0])
+        self.track_bar.mark_not_processed(frame_id)
+        del(self._fish_tracking[frame_id])
+
+        # remove item from listbox
+        self.tracking_listbox.delete(item_selected)
+
+        self.update_gui()
+    
+    def _classification_threshold_changed(self, value):
+        self._classification_threshold = float(value) / 100.0
+    
     def _trajectory_smooth_size_changed(self, value):
         v = int(value)
         # enforce odd number
@@ -294,6 +358,8 @@ class MainWindow(tk.Tk):
 
         # set the value to gui
         self.smooth_trajectory_scale.set(v)
+
+        self.update_gui()
 
     def _trajectory_frame_skip_changed(self, value):
         v = int(value)
@@ -408,20 +474,37 @@ class MainWindow(tk.Tk):
                 if x - sample_size_half < 0 or x + sample_size_half >= frame_image.shape[1] or y - sample_size_half < 0 or y + sample_size_half >= frame_image.shape[0]:
                     continue
 
-                # sample 32x32 and test classifier
-                sample = frame_image[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
-
-                # Apply transformations to the image
-                image_transformed = self._transform(sample)
-                image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
-
                 # Pass the transformed image to the model
-                output = self._classifier_model(image_transformed)
+                output = None
+                if not self._tracking_crosscheck.get():
+                    # sample 32x32 and test classifier
+                    sample = frame_image[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
+
+                    # Apply transformations to the image
+                    image_transformed = self._transform(sample)
+                    image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
+                    output = self._classifier_model(image_transformed)
+                else:
+                    outputs = []
+                    for image in [prev_frame_image, frame_image, next_frame_image]:
+                        # sample 32x32 and test classifier
+                        sample = image[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
+
+                        # Apply transformations to the image
+                        image_transformed = self._transform(sample)
+                        image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
+                        output = self._classifier_model(image_transformed)
+                        #output_sum = output_sum + output
+                        outputs.append(float(output))
+
+                    # take the worst output
+                    output = min(outputs)
 
                 # print output weight
                 if output > self._classification_threshold:
                     positives.append((output, contour, (x, y)))
             
+            track_hit = None
             if positives:
                 # sort by output
                 positives.sort(key=lambda x: x[0], reverse=True)
@@ -436,12 +519,17 @@ class MainWindow(tk.Tk):
                 # draw coordinates on our draw_image
                 cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
 
+                # update the tracking_listbox - add this positive to the list
+                self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, float(output)))
+
             #cv2.imshow("debug", draw_image)
             #cv2.waitKey(1)
 
             # update the image
             self._display_image = draw_image.copy()
             self.update_image(self._display_image)
+
+
 
             self.update()
 
@@ -463,7 +551,7 @@ class MainWindow(tk.Tk):
 
     def _set_track_end(self):
         self.track_bar.mark_processing_end(self.slider.get())
-
+    
     def _reset_tracking(self):
         self.track_bar.clear()
         self._fish_tracking = {}
@@ -743,6 +831,22 @@ class MainWindow(tk.Tk):
         assert self._current_frame is not None, "Failed to load first frame."
 
         self._image_width = self._current_frame.shape[1]
+
+        # Create a temporary Text widget with one line and same font as your Listbox
+        temp_text = tk.Text(self.tracking_listbox, height=1, font=("TkDefaultFont"))
+        temp_text.pack()
+
+        # Update the root to make sure widget sizes are calculated
+        self.tracking_listbox.update()
+
+        # Get the height of the text widget, which corresponds to the height of one line
+        MainWindow.ONE_LINE_HEIGHT = temp_text.winfo_reqheight()
+
+        temp_text.destroy()
+
+        # set height of the tracking_listbox
+        self.tracking_listbox.config(height=int(self._current_frame.shape[0] / MainWindow.ONE_LINE_HEIGHT))
+
 
     def _frame_to_time(self, frame, fps):
         # Calculate the total seconds
