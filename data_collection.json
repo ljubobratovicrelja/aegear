@@ -1,0 +1,15 @@
+{
+    "videosRoot": "data/videos/",
+    "videoFiles": [
+        "E7.MOV",
+        "E11.MOV",
+        "EE1.MOV",
+        "EE3.MOV",
+        "EE4.MOV",
+        "K9.MOV",
+        "S1.MOV"
+    ],
+    "skipFrames": 10,
+    "sampleWindow": 128,
+    "trainingDataRoot": "data/training"
+}
