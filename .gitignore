@@ -3,6 +3,8 @@ data/training/
 lib/
 etc/
 bin/
+dist/
+build/
 share/
 Scripts/
 .DS_Store
