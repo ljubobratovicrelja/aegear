@@ -12,3 +12,4 @@ pyvenv.cfg
 .vscode/
 src/__pycache__/
 *.pyc
+*.spec
