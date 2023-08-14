@@ -33,7 +33,7 @@ from maze.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from maze.utils import ToolTip
 
 # needed for the classifier loading
-import maze.classifier
+from maze.classifier import Classifier
 
 
 class TrackingBar(tk.Canvas):
@@ -139,6 +139,9 @@ class MainWindow(tk.Tk):
         self._draw_trajectory = tk.BooleanVar()
         self._draw_trajectory.set(True)
 
+        self._save_tracking_check = tk.BooleanVar()
+        self._save_tracking_check.set(True)
+
         self._tracking_crosscheck = tk.BooleanVar()
         self._tracking_crosscheck.set(True)
 
@@ -205,17 +208,26 @@ class MainWindow(tk.Tk):
         self.right_frame = tk.Frame(self)
         self.right_frame.pack(side=tk.RIGHT)
 
+        # Create a list of videos on the left side to the image_label
+        #self.video_listbox = tk.Listbox(self.center_frame, width=20, height=10)
+        #self.video_listbox.grid(row=0, column=0, sticky="nsew")
+
         # Create a label to hold the image
         self.image_label = tk.Label(self.center_frame, cursor="cross")
-        self.image_label.grid(row=0, column=0)
+        self.image_label.grid(row=0, column=0, sticky="nsew")
 
         # scrollbar for the listbox
         self.scrollbar = tk.Scrollbar(self.center_frame, orient=tk.VERTICAL)
-        self.scrollbar.grid(row=0, column=2, sticky=tk.N + tk.S)
+        self.scrollbar.grid(row=0, column=2, sticky="nsew")
 
         # Create a listbox for all tracked frames
-        self.tracking_listbox = tk.Listbox(self.center_frame, width=20, height=10, yscrollcommand=self.scrollbar.set)
-        self.tracking_listbox.grid(row=0, column=1)
+        self.tracking_listbox = tk.Listbox(self.center_frame, width=30, height=10, yscrollcommand=self.scrollbar.set)
+        self.tracking_listbox.grid(row=0, column=1, sticky="nsew")
+
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(2, weight=1)
 
         # add item select callback
         self.tracking_listbox.bind('<<ListboxSelect>>', self._listbox_item_selected)
@@ -248,6 +260,10 @@ class MainWindow(tk.Tk):
 
         self.run_tracking_button = tk.Button(self.right_frame, text="Run Tracking", command=self._run_tracking, state=tk.DISABLED)
         self.run_tracking_button.pack(side=tk.LEFT)
+
+        # Checkbutton to save tracking automatically
+        #self.save_tracking_checkbox = tk.Checkbutton(self.right_frame, text="Save Tracking", variable=self._save_tracking_check)
+        #self.save_tracking_checkbox.pack(side=tk.LEFT)
 
         # checkbox for tracking crosschecking
         self.crosscheck_checkbox = tk.Checkbutton(self.right_frame, text="Crosscheck", variable=self._tracking_crosscheck)
@@ -308,6 +324,7 @@ class MainWindow(tk.Tk):
         self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.file_menu.add_command(label="Load Video", command=self._load_video)
         self.file_menu.add_command(label="Load Classifier Model", command=self._load_classifier)
+        self.file_menu.add_command(label="Load Tracking", command=self._load_tracking)
         self.file_menu.add_command(label="Save Tracking", command=self._save_tracking)
         self.file_menu.add_command(label="Exit", command=self.destroy)
 
@@ -324,7 +341,11 @@ class MainWindow(tk.Tk):
         self.deiconify()
     
     def _listbox_item_selected(self, event):
-        item_selected = self.tracking_listbox.curselection()[0]
+        sel = self.tracking_listbox.curselection()
+        if not sel:
+            return
+
+        item_selected = sel[0]
 
         # get list item
         frame_id = int(self.tracking_listbox.get(item_selected).split(":")[0])
@@ -371,8 +392,11 @@ class MainWindow(tk.Tk):
             messagebox.showerror("Error", "No classifier model selected.")
             return
 
-        self._classifier_model = torch.load(model_path)
-        self._classifier_model.to("cpu")
+        device = torch.device("cpu")
+
+        self._classifier_model = Classifier()
+        self._classifier_model.load_state_dict(torch.load(model_path, map_location=device))
+        self._classifier_mode.to(device)
 
         self._classifier_model.eval()
 
@@ -565,6 +589,9 @@ class MainWindow(tk.Tk):
     
     def _about(self):
         messagebox.showinfo("About", "Maze Tracking\n\nAuthor: Relja Ljubobratovic\nEmail: ljubobratovic.relja@gmail.com")
+    
+    def _load_tracking(self):
+        pass
 
     def _save_tracking(self):
         pass
@@ -842,10 +869,15 @@ class MainWindow(tk.Tk):
         # Get the height of the text widget, which corresponds to the height of one line
         MainWindow.ONE_LINE_HEIGHT = temp_text.winfo_reqheight()
 
+        # include the marging to another list item
+        MainWindow.ONE_LINE_HEIGHT += 4
+
         temp_text.destroy()
 
         # set height of the tracking_listbox
         self.tracking_listbox.config(height=int(self._current_frame.shape[0] / MainWindow.ONE_LINE_HEIGHT))
+        self.tracking_listbox.update()
+
 
 
     def _frame_to_time(self, frame, fps):
