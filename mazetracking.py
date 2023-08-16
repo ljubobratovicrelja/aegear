@@ -180,8 +180,13 @@ class MainWindow(tk.Tk):
         #initial_video = "data/videos/K9.MOV"
         #initial_video = "data/videos/EE1.MOV"
 
-        self._classifier_model = torch.load("data/models/model_cnn4_v3.pth")
-        self._classifier_model.to("cpu")
+        model_default_path = "data/models/model_cnn4_v3.pth"
+
+        device = torch.device("cpu")
+
+        self._classifier_model = Classifier()
+        self._classifier_model.load_state_dict(torch.load(model_default_path, map_location=device))
+        self._classifier_model.to(device)
 
         self._classifier_model.eval()
         #### DEBUG PART END ######
@@ -396,7 +401,7 @@ class MainWindow(tk.Tk):
 
         self._classifier_model = Classifier()
         self._classifier_model.load_state_dict(torch.load(model_path, map_location=device))
-        self._classifier_mode.to(device)
+        self._classifier_model.to(device)
 
         self._classifier_model.eval()
 
@@ -579,6 +584,9 @@ class MainWindow(tk.Tk):
     def _reset_tracking(self):
         self.track_bar.clear()
         self._fish_tracking = {}
+
+        # clear tracking listbox
+        self.tracking_listbox.delete(0, tk.END)
 
         # also reset start and end
         self.track_bar.unmark_processing_start()

@@ -15,7 +15,7 @@ with open(os.path.join(root, 'requirements.txt')) as f:
 # Define the setup parameters
 setup(
     name='mazetracking',
-    version='1.0',
+    version='1.1',
     description='A module for tracking fish motion in a maze',
     author='Relja Ljubobratovic',
     author_email='ljubobratovic.relja@gmail.com',
