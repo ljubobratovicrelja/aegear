@@ -145,13 +145,15 @@ class MainWindow(tk.Tk):
         self._tracking_crosscheck = tk.BooleanVar()
         self._tracking_crosscheck.set(True)
 
-
         self._fish_tracking = {}
         self._trajectory_smooth_size = 9
         self._trajectory_frame_skip = 3
 
         self._classification_threshold = 0.99  # we can expect classifier to be very confident
         self._classifier_model = None
+
+        self._motion_detection_min_area = 800
+        self._motion_detection_max_area = 4000
 
         # classifier transformations 
         self._transform = transforms.Compose([
@@ -168,7 +170,7 @@ class MainWindow(tk.Tk):
         self._maze_calibration = MazeCalibration("data/calibration.xml")
 
         # motion detector
-        self._motion_detector = MotionDetector(10, 3, 15, 800, 2500)
+        self._motion_detector = MotionDetector(10, 3, 15, self._motion_detection_min_area, self._motion_detection_max_area)
 
         self.dialog_window = tk.Toplevel(self)
         self.dialog_window.withdraw()
@@ -180,7 +182,7 @@ class MainWindow(tk.Tk):
         #initial_video = "data/videos/K9.MOV"
         #initial_video = "data/videos/EE1.MOV"
 
-        model_default_path = "data/models/model_cnn4_v3.pth"
+        model_default_path = "data/models/model_cnn4_v4.pth"
 
         device = torch.device("cpu")
 
@@ -297,6 +299,15 @@ class MainWindow(tk.Tk):
         self.tracking_frame_scale.set(self._trajectory_frame_skip)
         self.tracking_frame_scale.pack(side=tk.LEFT)
 
+        # scale for min and max area
+        self.motion_detection_min_area_scale = tk.Scale(self.right_frame, from_=0, to=10000, orient=tk.HORIZONTAL, label="Min Area", command=self._motion_detection_min_area_changed)
+        self.motion_detection_min_area_scale.set(self._motion_detection_min_area)
+        self.motion_detection_min_area_scale.pack(side=tk.LEFT)
+
+        self.motion_detection_max_area_scale = tk.Scale(self.right_frame, from_=0, to=10000, orient=tk.HORIZONTAL, label="Max Area", command=self._motion_detection_max_area_changed)
+        self.motion_detection_max_area_scale.set(self._motion_detection_max_area)
+        self.motion_detection_max_area_scale.pack(side=tk.LEFT)
+
         self.draw_trajectory_checkbox = tk.Checkbutton(self.right_frame, text="Draw Trajectory", variable=self._draw_trajectory)
         self.draw_trajectory_checkbox.pack(side=tk.LEFT)
 
@@ -390,6 +401,14 @@ class MainWindow(tk.Tk):
     def _trajectory_frame_skip_changed(self, value):
         v = int(value)
         self._trajectory_frame_skip = v
+    
+    def _motion_detection_min_area_changed(self, value):
+        v = int(value)
+        self._motion_detection_min_area = v
+    
+    def _motion_detection_max_area_changed(self, value):
+        v = int(value)
+        self._motion_detection_max_area = v
         
     def _load_classifier(self):
         model_path = filedialog.askopenfilename()
