@@ -10,6 +10,10 @@ Scripts/
 .DS_Store
 pyvenv.cfg
 .vscode/
+venv/
 src/__pycache__/
 *.pyc
 *.spec
+*.MOV
+data/calibration_images/
+best_model.pth
