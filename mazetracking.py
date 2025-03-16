@@ -33,7 +33,9 @@ from maze.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from maze.utils import ToolTip
 
 # needed for the classifier loading
-from maze.classifier import ShallowFishNet
+from maze.classifier import FishNet
+
+Model = FishNet
 
 
 class TrackingBar(tk.Canvas):
@@ -182,11 +184,11 @@ class MainWindow(tk.Tk):
 
         #### DEBUG PART ######
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
-        model_default_path = "data/models/model_cnn4_v6_shallow.pth"
+        model_default_path = "data/models/model_cnn4_v7.pth"
 
         device = torch.device("cpu")
 
-        self._classifier_model = ShallowFishNet()
+        self._classifier_model = Model()
         self._classifier_model.load_state_dict(torch.load(model_default_path, map_location=device))
         self._classifier_model.to(device)
 
@@ -418,7 +420,7 @@ class MainWindow(tk.Tk):
 
         device = torch.device("cpu")
 
-        self._classifier_model = ShallowFishNet()
+        self._classifier_model = Model()
         self._classifier_model.load_state_dict(torch.load(model_path, map_location=device))
         self._classifier_model.to(device)
 
