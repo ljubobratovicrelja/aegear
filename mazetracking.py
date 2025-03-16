@@ -33,7 +33,7 @@ from maze.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from maze.utils import ToolTip
 
 # needed for the classifier loading
-from maze.classifier import Classifier
+from maze.classifier import ShallowFishNet
 
 
 class TrackingBar(tk.Canvas):
@@ -116,6 +116,7 @@ class TrackingBar(tk.Canvas):
 class MainWindow(tk.Tk):
 
     ONE_LINE_HEIGHT = 16
+    IMG_SIZE = 64
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -159,8 +160,10 @@ class MainWindow(tk.Tk):
         self._transform = transforms.Compose([
             transforms.ToPILImage(),  # Convert np array to PIL Image
             transforms.ToTensor(),  # Convert PIL Image to PyTorch tensor
-            transforms.Grayscale(num_output_channels=3),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize with ImageNet mean and std
+            transforms.Resize(int(MainWindow.IMG_SIZE * 1.25)),
+            transforms.CenterCrop(MainWindow.IMG_SIZE),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225]),
         ])
 
         # screen points for calibration and other purposes
@@ -179,14 +182,11 @@ class MainWindow(tk.Tk):
 
         #### DEBUG PART ######
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
-        #initial_video = "data/videos/K9.MOV"
-        #initial_video = "data/videos/EE1.MOV"
-
-        model_default_path = "data/models/model_cnn4_v4.pth"
+        model_default_path = "data/models/model_cnn4_v6_shallow.pth"
 
         device = torch.device("cpu")
 
-        self._classifier_model = Classifier()
+        self._classifier_model = ShallowFishNet()
         self._classifier_model.load_state_dict(torch.load(model_default_path, map_location=device))
         self._classifier_model.to(device)
 
@@ -418,7 +418,7 @@ class MainWindow(tk.Tk):
 
         device = torch.device("cpu")
 
-        self._classifier_model = Classifier()
+        self._classifier_model = ShallowFishNet()
         self._classifier_model.load_state_dict(torch.load(model_path, map_location=device))
         self._classifier_model.to(device)
 
@@ -463,7 +463,7 @@ class MainWindow(tk.Tk):
         progress_value = 0.0
 
         # size of the classifiers window
-        sample_size = 32
+        sample_size = 128
         sample_size_half = sample_size // 2
 
         # measure estimated time as well
@@ -503,7 +503,7 @@ class MainWindow(tk.Tk):
             next_frame_image = cv2.cvtColor(next_frame_image, cv2.COLOR_BGR2RGB)
 
             # perform tracking
-            good_contours, bad_contours = self._motion_detector.detect2(prev_frame_image, frame_image, next_frame_image)
+            good_contours, bad_contours = self._motion_detector.detect(prev_frame_image, frame_image, next_frame_image)
 
             # draw contours
             cv2.drawContours(draw_image, good_contours, -1, (0, 255, 0), 2)
@@ -525,8 +525,8 @@ class MainWindow(tk.Tk):
                 # Pass the transformed image to the model
                 output = None
                 if not self._tracking_crosscheck.get():
-                    # sample 32x32 and test classifier
                     sample = frame_image[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
+                    sample = cv2.cvtColor(sample, cv2.COLOR_RGB2BGR)
 
                     # Apply transformations to the image
                     image_transformed = self._transform(sample)
@@ -535,8 +535,8 @@ class MainWindow(tk.Tk):
                 else:
                     outputs = []
                     for image in [prev_frame_image, frame_image, next_frame_image]:
-                        # sample 32x32 and test classifier
                         sample = image[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
+                        sample = cv2.cvtColor(sample, cv2.COLOR_RGB2BGR)
 
                         # Apply transformations to the image
                         image_transformed = self._transform(sample)

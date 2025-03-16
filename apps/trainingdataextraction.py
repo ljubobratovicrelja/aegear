@@ -229,7 +229,7 @@ while True:
         nextFrame = cv2.cvtColor(nextFrame, cv2.COLOR_RGB2BGR)
 
         # calculate motion
-        good_contours, bad_contours = motion_detector.detect2(prevFrame, frame, nextFrame)
+        good_contours, bad_contours = motion_detector.detect(prevFrame, frame, nextFrame)
 
         # draw contours
         frame_draw = frame.copy()
