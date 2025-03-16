@@ -17,3 +17,4 @@ src/__pycache__/
 *.MOV
 data/calibration_images/
 best_model.pth
+paper/
