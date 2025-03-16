@@ -1,8 +1,8 @@
 """
-Camera calibration notebook
- 
-This notebook is used to calibrate the camera and save the calibration parameters
-to an opencv file. The calibration parameters are used in the main notebook to
+Camera calibration script.
+
+This script is used to calibrate the camera and save the calibration parameters
+to an opencv file. The calibration parameters are used in the main script to
 undistort the images.
  
 The first input box defines input parameters for all of the procedure. Be sure to
