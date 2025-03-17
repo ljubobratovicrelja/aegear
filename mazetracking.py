@@ -16,7 +16,8 @@ import cv2
 from PIL import Image, ImageTk
 
 import torch
-from torchvision import transforms
+from torchvision import transforms, models
+import torch.nn as nn
 
 import tkinter as tk
 import tkinter.messagebox as messagebox
@@ -118,7 +119,7 @@ class TrackingBar(tk.Canvas):
 class MainWindow(tk.Tk):
 
     ONE_LINE_HEIGHT = 16
-    IMG_SIZE = 64
+    IMG_SIZE = 129
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -159,6 +160,7 @@ class MainWindow(tk.Tk):
         self._motion_detection_max_area = 4000
 
         # classifier transformations 
+        """
         self._transform = transforms.Compose([
             transforms.ToPILImage(),  # Convert np array to PIL Image
             transforms.ToTensor(),  # Convert PIL Image to PyTorch tensor
@@ -166,6 +168,16 @@ class MainWindow(tk.Tk):
             transforms.CenterCrop(MainWindow.IMG_SIZE),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                          std=[0.229, 0.224, 0.225]),
+        ])
+        """
+
+        self._transform = transforms.Compose([
+            transforms.ToPILImage(),  # Convert np array to PIL Image
+            transforms.ToTensor(),  # Convert PIL Image to PyTorch tensor
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                std=[0.229, 0.224, 0.225]),
         ])
 
         # screen points for calibration and other purposes
@@ -175,7 +187,7 @@ class MainWindow(tk.Tk):
         self._maze_calibration = MazeCalibration("data/calibration.xml")
 
         # motion detector
-        self._motion_detector = MotionDetector(10, 3, 15, self._motion_detection_min_area, self._motion_detection_max_area)
+        self._motion_detector = MotionDetector(30, 3, 15, self._motion_detection_min_area, self._motion_detection_max_area)
 
         self.dialog_window = tk.Toplevel(self)
         self.dialog_window.withdraw()
@@ -184,11 +196,13 @@ class MainWindow(tk.Tk):
 
         #### DEBUG PART ######
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
-        model_default_path = "data/models/model_cnn4_v7.pth"
+        model_default_path = "data/models/model_efficient_b0_v1.pth"
 
         device = torch.device("cpu")
 
-        self._classifier_model = Model()
+        self._classifier_model = models.efficientnet_b0(pretrained=True)
+        in_features = self._classifier_model.classifier[1].in_features
+        self._classifier_model.classifier[1] = nn.Linear(in_features, 1)
         self._classifier_model.load_state_dict(torch.load(model_default_path, map_location=device))
         self._classifier_model.to(device)
 
@@ -421,6 +435,12 @@ class MainWindow(tk.Tk):
         device = torch.device("cpu")
 
         self._classifier_model = Model()
+
+        # load the model
+        model = models.efficientnet_b0(pretrained=True)
+        in_features = model.classifier[1].in_features
+        model.classifier[1] = nn.Linear(in_features, 1)
+
         self._classifier_model.load_state_dict(torch.load(model_path, map_location=device))
         self._classifier_model.to(device)
 
@@ -465,7 +485,7 @@ class MainWindow(tk.Tk):
         progress_value = 0.0
 
         # size of the classifiers window
-        sample_size = 128
+        sample_size = 129
         sample_size_half = sample_size // 2
 
         # measure estimated time as well
@@ -533,7 +553,7 @@ class MainWindow(tk.Tk):
                     # Apply transformations to the image
                     image_transformed = self._transform(sample)
                     image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
-                    output = self._classifier_model(image_transformed)
+                    output = torch.sigmoid(self._classifier_model(image_transformed))
                 else:
                     outputs = []
                     for image in [prev_frame_image, frame_image, next_frame_image]:
@@ -543,7 +563,7 @@ class MainWindow(tk.Tk):
                         # Apply transformations to the image
                         image_transformed = self._transform(sample)
                         image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
-                        output = self._classifier_model(image_transformed)
+                        output = torch.sigmoid(self._classifier_model(image_transformed))
                         #output_sum = output_sum + output
                         outputs.append(float(output))
 
