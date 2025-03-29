@@ -32,11 +32,7 @@ from maze.motiondetection import MotionDetector
 
 from maze.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from maze.utils import ToolTip
-
-# needed for the classifier loading
-from maze.classifier import FishNet
-
-Model = FishNet
+from maze.tracker import FishTracker
 
 
 class TrackingBar(tk.Canvas):
@@ -154,31 +150,9 @@ class MainWindow(tk.Tk):
         self._trajectory_frame_skip = 3
 
         self._classification_threshold = 0.99  # we can expect classifier to be very confident
-        self._classifier_model = None
 
         self._motion_detection_min_area = 800
         self._motion_detection_max_area = 4000
-
-        # classifier transformations 
-        """
-        self._transform = transforms.Compose([
-            transforms.ToPILImage(),  # Convert np array to PIL Image
-            transforms.ToTensor(),  # Convert PIL Image to PyTorch tensor
-            transforms.Resize(int(MainWindow.IMG_SIZE * 1.25)),
-            transforms.CenterCrop(MainWindow.IMG_SIZE),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-        ])
-        """
-
-        self._transform = transforms.Compose([
-            transforms.ToPILImage(),  # Convert np array to PIL Image
-            transforms.ToTensor(),  # Convert PIL Image to PyTorch tensor
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                std=[0.229, 0.224, 0.225]),
-        ])
 
         # screen points for calibration and other purposes
         self._screen_points = []
@@ -186,8 +160,6 @@ class MainWindow(tk.Tk):
         # initiate maze calibration utility
         self._maze_calibration = MazeCalibration("data/calibration.xml")
 
-        # motion detector
-        self._motion_detector = MotionDetector(30, 3, 15, self._motion_detection_min_area, self._motion_detection_max_area)
 
         self.dialog_window = tk.Toplevel(self)
         self.dialog_window.withdraw()
@@ -196,18 +168,12 @@ class MainWindow(tk.Tk):
 
         #### DEBUG PART ######
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
-        model_default_path = "data/models/model_efficient_b0_v1.pth"
 
-        device = torch.device("cpu")
-
-        self._classifier_model = models.efficientnet_b0(pretrained=True)
-        in_features = self._classifier_model.classifier[1].in_features
-        self._classifier_model.classifier[1] = nn.Linear(in_features, 1)
-        self._classifier_model.load_state_dict(torch.load(model_default_path, map_location=device))
-        self._classifier_model.to(device)
-
-        self._classifier_model.eval()
         #### DEBUG PART END ######
+
+        # Tracker setup.
+        model_default_path = "data/models/mask_rcnn/mask_rcnn_R_50_C4_1x.pth"
+        self._tracker = FishTracker(model_default_path)
 
         if initial_video == "":
             # warning dialog and close the app
@@ -230,10 +196,6 @@ class MainWindow(tk.Tk):
 
         self.right_frame = tk.Frame(self)
         self.right_frame.pack(side=tk.RIGHT)
-
-        # Create a list of videos on the left side to the image_label
-        #self.video_listbox = tk.Listbox(self.center_frame, width=20, height=10)
-        #self.video_listbox.grid(row=0, column=0, sticky="nsew")
 
         # Create a label to hold the image
         self.image_label = tk.Label(self.center_frame, cursor="cross")
@@ -283,10 +245,6 @@ class MainWindow(tk.Tk):
 
         self.run_tracking_button = tk.Button(self.right_frame, text="Run Tracking", command=self._run_tracking, state=tk.DISABLED)
         self.run_tracking_button.pack(side=tk.LEFT)
-
-        # Checkbutton to save tracking automatically
-        #self.save_tracking_checkbox = tk.Checkbutton(self.right_frame, text="Save Tracking", variable=self._save_tracking_check)
-        #self.save_tracking_checkbox.pack(side=tk.LEFT)
 
         # checkbox for tracking crosschecking
         self.crosscheck_checkbox = tk.Checkbutton(self.right_frame, text="Crosscheck", variable=self._tracking_crosscheck)
@@ -355,7 +313,6 @@ class MainWindow(tk.Tk):
         # create file menu
         self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.file_menu.add_command(label="Load Video", command=self._load_video)
-        self.file_menu.add_command(label="Load Classifier Model", command=self._load_classifier)
         self.file_menu.add_command(label="Load Tracking", command=self._load_tracking)
         self.file_menu.add_command(label="Save Tracking", command=self._save_tracking)
         self.file_menu.add_command(label="Exit", command=self.destroy)
@@ -425,34 +382,10 @@ class MainWindow(tk.Tk):
     def _motion_detection_max_area_changed(self, value):
         v = int(value)
         self._motion_detection_max_area = v
-        
-    def _load_classifier(self):
-        model_path = filedialog.askopenfilename()
-        if model_path == "":
-            messagebox.showerror("Error", "No classifier model selected.")
-            return
-
-        device = torch.device("cpu")
-
-        self._classifier_model = Model()
-
-        # load the model
-        model = models.efficientnet_b0(pretrained=True)
-        in_features = model.classifier[1].in_features
-        model.classifier[1] = nn.Linear(in_features, 1)
-
-        self._classifier_model.load_state_dict(torch.load(model_path, map_location=device))
-        self._classifier_model.to(device)
-
-        self._classifier_model.eval()
-
-        # show status that model is loaded
-        self.status_bar['text'] = "Classifier model loaded."
-        self.status_bar['fg'] = "green"
     
     def _run_tracking(self):
-        if self._classifier_model is None:
-            messagebox.showerror("Error", "Please load a classifier model first.")
+        if self._tracker is None:
+            messagebox.showerror("Error", "Tracking model not initialized.")
             return
         
         if self.track_bar.processing_start is None or self.track_bar.processing_end is None:
@@ -484,10 +417,6 @@ class MainWindow(tk.Tk):
         progress_increment = 100.0 / ((track_end_frame - track_start_frame) / self._trajectory_frame_skip)
         progress_value = 0.0
 
-        # size of the classifiers window
-        sample_size = 129
-        sample_size_half = sample_size // 2
-
         # measure estimated time as well
         start_time = time.time()
 
@@ -510,96 +439,33 @@ class MainWindow(tk.Tk):
 
             progress_label['text'] = "Progress: {}%, estimated time: {}".format(int(progress_value), estimated_time_str)
 
-            # positive hits, potential fish locations
-            positives = []
-
-            prev_frame_image = self._read_frame(frame_id-1)
             frame_image = self._read_frame(frame_id)
-            next_frame_image = self._read_frame(frame_id)
 
             draw_image = frame_image.copy()
 
             # turn to RGB
-            prev_frame_image = cv2.cvtColor(prev_frame_image, cv2.COLOR_BGR2RGB)
             frame_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
-            next_frame_image = cv2.cvtColor(next_frame_image, cv2.COLOR_BGR2RGB)
 
-            # perform tracking
-            good_contours, bad_contours = self._motion_detector.detect(prev_frame_image, frame_image, next_frame_image)
-
-            # draw contours
-            cv2.drawContours(draw_image, good_contours, -1, (0, 255, 0), 2)
-            cv2.drawContours(draw_image, bad_contours, -1, (0, 0, 255), 2)
-
-            for contour in good_contours:
-                # find center of the contour
-                M = cv2.moments(contour)
-                x = int(M['m10']/M['m00'])
-                y = int(M['m01']/M['m00'])
-
-                # draw center
-                draw_image = cv2.circle(draw_image, (x, y), 5, (0, 255, 0), -1)
-
-                # given sample size, check if ROI is within the frame
-                if x - sample_size_half < 0 or x + sample_size_half >= frame_image.shape[1] or y - sample_size_half < 0 or y + sample_size_half >= frame_image.shape[0]:
-                    continue
-
-                # Pass the transformed image to the model
-                output = None
-                if not self._tracking_crosscheck.get():
-                    sample = frame_image[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
-                    sample = cv2.cvtColor(sample, cv2.COLOR_RGB2BGR)
-
-                    # Apply transformations to the image
-                    image_transformed = self._transform(sample)
-                    image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
-                    output = torch.sigmoid(self._classifier_model(image_transformed))
-                else:
-                    outputs = []
-                    for image in [prev_frame_image, frame_image, next_frame_image]:
-                        sample = image[y - sample_size_half:y + sample_size_half, x - sample_size_half:x + sample_size_half]
-                        sample = cv2.cvtColor(sample, cv2.COLOR_RGB2BGR)
-
-                        # Apply transformations to the image
-                        image_transformed = self._transform(sample)
-                        image_transformed = image_transformed.unsqueeze(0)  # Add batch dimension
-                        output = torch.sigmoid(self._classifier_model(image_transformed))
-                        #output_sum = output_sum + output
-                        outputs.append(float(output))
-
-                    # take the worst output
-                    output = min(outputs)
-
-                # print output weight
-                if output > self._classification_threshold:
-                    positives.append((output, contour, (x, y)))
+            result = self._tracker.track(frame_image)
             
-            track_hit = None
-            if positives:
-                # sort by output
-                positives.sort(key=lambda x: x[0], reverse=True)
+            if result is None:
+                continue
 
-                # take the first one
-                (output, contour, coordinates) = positives[0]
+            (coordinates, score) = result
+            
+            self._fish_tracking[frame_id] = coordinates
 
-                self._fish_tracking[frame_id] = (contour, coordinates)
+            self.track_bar.mark_processed(frame_id)
 
-                self.track_bar.mark_processed(frame_id)
+            # draw coordinates on our draw_image
+            cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
 
-                # draw coordinates on our draw_image
-                cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
-
-                # update the tracking_listbox - add this positive to the list
-                self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, float(output)))
-
-            #cv2.imshow("debug", draw_image)
-            #cv2.waitKey(1)
+            # update the tracking_listbox - add this positive to the list
+            self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, score))
 
             # update the image
             self._display_image = draw_image.copy()
             self.update_image(self._display_image)
-
-
 
             self.update()
 
@@ -856,11 +722,8 @@ class MainWindow(tk.Tk):
         # draw tracking if present
         frame_id = self._get_current_frame_number()
         if frame_id in self._fish_tracking:
-            (contour, (x, y)) = self._fish_tracking[frame_id]
+            (x, y) = self._fish_tracking[frame_id]
             image = cv2.circle(image, (x, y), 12, (0, 255, 0))
-
-            # draw contour
-            image = cv2.drawContours(image, [contour], -1, (0, 255, 0), 2)
 
         if self._draw_trajectory.get() and len(self._fish_tracking) > 1:
             # take trajectory up to this frame
@@ -870,7 +733,7 @@ class MainWindow(tk.Tk):
                 if frame_id >= self._get_current_frame_number():
                     break
 
-                (contour, ptn) = self._fish_tracking[frame_id]
+                ptn = self._fish_tracking[frame_id]
                 trajectory.append(ptn) 
             
             s_trajectory = smoothTrajectory(trajectory, self._trajectory_smooth_size)

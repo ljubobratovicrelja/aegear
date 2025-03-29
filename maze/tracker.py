@@ -64,6 +64,7 @@ class FishTracker:
         """
 
         self.window_size = window_size
+        self.window_stride = window_stride
         self._model = FishTracker._init_model(model_path, score_threshold, window_size)
         self.detection_threshold = detection_threshold
         self.last_position = None
@@ -83,13 +84,16 @@ class FishTracker:
         return DefaultPredictor(cfg)
     
     def track(self, frame):
+        confidence = 0.0
+
         if self.last_position is None:
             # Do a sliding window over the whole frame to try and find our fish.
             results = self._sliding_window_predict(frame)
-            if results is None:
+            if not results:
                 return None
             
             self.last_position = results[0].centroid
+            confidence = results[0].score
         else:
             # Try getting a ROI around the last position.
             x, y = self.last_position
@@ -113,7 +117,7 @@ class FishTracker:
 
             results = self._evaluate_model(roi)
 
-            if results is None:
+            if not results:
                 # If we don't find anything, we reset the last position and try again.
                 self.last_position = None
                 return self.track(frame)
@@ -121,8 +125,9 @@ class FishTracker:
             best_result = results[0].global_coordinates((x, y))
 
             self.last_position = best_result.centroid
+            confidence = best_result.score
 
-        return self.last_position
+        return (self.last_position, confidence)
 
 
     def _sliding_window_predict(self, frame) -> List[Prediction]:
@@ -154,7 +159,7 @@ class FishTracker:
 
                 window_results = self._evaluate_model(window)
 
-                if window_results is None:
+                if not window_results:
                     continue
 
                 # Do thorough check on the results to confirm our result.
@@ -179,8 +184,14 @@ class FishTracker:
         Note that this returns the prediction in window local space. For global space
         adjust the centroid and box coordinates accordingly using the origin of the window.
         """
-        outputs = self._model(window)
-        instances = outputs["instances"].to("cpu")
+
+        try:
+            outputs = self._model(window)
+            instances = outputs["instances"].to("cpu")
+        except Exception as e:
+            print(f"Error in model evaluation: {e}")
+            # If we get an error, we just return None.
+            return None
 
         results = []
 
