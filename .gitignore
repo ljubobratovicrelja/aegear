@@ -18,3 +18,4 @@ src/__pycache__/
 data/calibration_images/
 best_model.pth
 paper/
+data/models/mask_rcnn/
