@@ -83,12 +83,12 @@ class FishTracker:
 
         return DefaultPredictor(cfg)
     
-    def track(self, frame):
+    def track(self, frame, mask=None):
         confidence = 0.0
 
         if self.last_position is None:
             # Do a sliding window over the whole frame to try and find our fish.
-            results = self._sliding_window_predict(frame)
+            results = self._sliding_window_predict(frame, mask)
             if not results:
                 return None
             
@@ -130,7 +130,7 @@ class FishTracker:
         return (self.last_position, confidence)
 
 
-    def _sliding_window_predict(self, frame) -> List[Prediction]:
+    def _sliding_window_predict(self, frame, mask=None) -> List[Prediction]:
         """
         Do a sliding window over the whole frame to try and find our fish.
 
@@ -152,7 +152,19 @@ class FishTracker:
 
         for y in range(0, h, self.window_stride):
             for x in range(0, w, self.window_stride):
-                window = frame[y:y+self.window_size[1], x:x+self.window_size[0]]
+
+                if mask is not None:
+                    # Check if the window is in the mask.
+                    if mask[y:y+self.window_size[1], x:x+self.window_size[0]].sum() == 0:
+                        continue
+
+                try:
+                    window = frame[y:y+self.window_size[1], x:x+self.window_size[0]]
+                except:
+                    # If we go out of bounds, we skip this window.
+                    continue
+
+                print(f"Evaluating window at: {x}, {y}")
 
                 if window.shape[0] != self.window_size[1] or window.shape[1] != self.window_size[0]:
                     continue
@@ -164,6 +176,9 @@ class FishTracker:
 
                 # Do thorough check on the results to confirm our result.
                 window_results = self._thorough_check(window_results, window)
+
+                if not window_results:
+                    continue
 
                 # Data is already sorted by score so just take the first one, as we're only
                 # interested in the best score per sliding window.
@@ -265,6 +280,10 @@ class FishTracker:
                 # If we go out of bounds, we skip this result.
                 continue
 
+            # Check if the roi is valid.
+            if roi.shape[0] * roi.shape[1] == 0:
+                continue
+
             passed = True
             for _ in range(iterations):
                 # Construct a random rotation matrix
@@ -276,7 +295,7 @@ class FishTracker:
 
                 cross_check_results = self._evaluate_model(rotated_roi)
 
-                if cross_check_results is None:
+                if not cross_check_results:
                     continue
 
                 best_result = cross_check_results[0]

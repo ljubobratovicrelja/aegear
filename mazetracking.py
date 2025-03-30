@@ -173,7 +173,7 @@ class MainWindow(tk.Tk):
 
         # Tracker setup.
         model_default_path = "data/models/mask_rcnn/mask_rcnn_R_50_C4_1x.pth"
-        self._tracker = FishTracker(model_default_path)
+        self._tracker = FishTracker(model_default_path, score_threshold=0.9, window_size=(256, 256), window_stride=128)
 
         if initial_video == "":
             # warning dialog and close the app
@@ -417,6 +417,20 @@ class MainWindow(tk.Tk):
         progress_increment = 100.0 / ((track_end_frame - track_start_frame) / self._trajectory_frame_skip)
         progress_value = 0.0
 
+        bck_substractor = cv2.createBackgroundSubtractorKNN(history=100)
+
+        # Initialize (warm-up) the background substractor
+        for frame_id in range(max(track_start_frame - 10, 0), track_start_frame, 1):
+            frame_image = self._read_frame(frame_id)
+            if frame_image is None:
+                continue
+
+            gframe_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2GRAY)
+            gframe_image = cv2.medianBlur(gframe_image, 5)
+
+            bck_substractor.apply(gframe_image)
+            
+
         # measure estimated time as well
         start_time = time.time()
 
@@ -439,14 +453,30 @@ class MainWindow(tk.Tk):
 
             progress_label['text'] = "Progress: {}%, estimated time: {}".format(int(progress_value), estimated_time_str)
 
+            # Read the input frame.
             frame_image = self._read_frame(frame_id)
+
+            # Apply background masking
+            gframe_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2GRAY)
+            gframe_image = cv2.medianBlur(gframe_image, 5)
+            background_mask = bck_substractor.apply(gframe_image)
+
+            # Do some morphology to remove noise
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+
+            # We close to remove noise and dilate to make the mask less sensitive.
+            background_mask = cv2.morphologyEx(background_mask, cv2.MORPH_CLOSE, kernel) 
+            background_mask = cv2.dilate(background_mask, kernel, iterations=2) 
+
+            # Finally threshold to be 100% sure we have a binary mask
+            _, background_mask = cv2.threshold(background_mask, 127, 255, cv2.THRESH_BINARY)
 
             draw_image = frame_image.copy()
 
             # turn to RGB
             frame_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
 
-            result = self._tracker.track(frame_image)
+            result = self._tracker.track(frame_image, mask=background_mask)
             
             if result is None:
                 continue
