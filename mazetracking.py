@@ -172,7 +172,7 @@ class MainWindow(tk.Tk):
         #### DEBUG PART END ######
 
         # Tracker setup.
-        model_default_path = "data/models/mask_rcnn/model_final.pth"
+        model_default_path = "data/models/mask_rcnn/mask_rcnn_R_50_C4_1x_v3.pth"
         self._tracker = FishTracker(model_default_path, score_threshold=0.5, tracking_threshold=0.9, detection_threshold=0.92, tracking_window=256, window_size=(256,256), window_stride=128)
 
         if initial_video == "":
