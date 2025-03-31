@@ -172,8 +172,8 @@ class MainWindow(tk.Tk):
         #### DEBUG PART END ######
 
         # Tracker setup.
-        model_default_path = "data/models/mask_rcnn/mask_rcnn_R_50_C4_1x.pth"
-        self._tracker = FishTracker(model_default_path, score_threshold=0.9, window_size=(256, 256), window_stride=128)
+        model_default_path = "data/models/mask_rcnn/model_final.pth"
+        self._tracker = FishTracker(model_default_path, score_threshold=0.5, tracking_threshold=0.9, detection_threshold=0.92, tracking_window=256, window_size=(256,256), window_stride=128)
 
         if initial_video == "":
             # warning dialog and close the app
@@ -426,10 +426,9 @@ class MainWindow(tk.Tk):
                 continue
 
             gframe_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2GRAY)
-            gframe_image = cv2.medianBlur(gframe_image, 5)
+            gframe_image = cv2.medianBlur(gframe_image, 3)
 
             bck_substractor.apply(gframe_image)
-            
 
         # measure estimated time as well
         start_time = time.time()
@@ -458,14 +457,15 @@ class MainWindow(tk.Tk):
 
             # Apply background masking
             gframe_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2GRAY)
-            gframe_image = cv2.medianBlur(gframe_image, 5)
+            gframe_image = cv2.medianBlur(gframe_image, 3)
+
             background_mask = bck_substractor.apply(gframe_image)
 
             # Do some morphology to remove noise
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
             # We close to remove noise and dilate to make the mask less sensitive.
-            background_mask = cv2.morphologyEx(background_mask, cv2.MORPH_CLOSE, kernel) 
+            background_mask = cv2.erode(background_mask, kernel, iterations=1)
             background_mask = cv2.dilate(background_mask, kernel, iterations=2) 
 
             # Finally threshold to be 100% sure we have a binary mask
@@ -819,8 +819,6 @@ class MainWindow(tk.Tk):
         # set height of the tracking_listbox
         self.tracking_listbox.config(height=int(self._current_frame.shape[0] / MainWindow.ONE_LINE_HEIGHT))
         self.tracking_listbox.update()
-
-
 
     def _frame_to_time(self, frame, fps):
         # Calculate the total seconds
