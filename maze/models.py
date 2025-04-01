@@ -225,10 +225,13 @@ class EfficientUNet(nn.Module):
         # Final conv to produce 1-channel heatmap
         self.out = nn.Conv2d(8, 1, kernel_size=1)
 
-    def _up_block(self, in_channels, out_channels):
+    def _up_block(self, in_ch, out_ch):
         return nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2),
-            nn.ReLU(inplace=True)
+            nn.ConvTranspose2d(in_ch, out_ch, kernel_size=2, stride=2),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(0.3),
         )
 
     def forward(self, x):
