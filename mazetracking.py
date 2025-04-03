@@ -28,7 +28,6 @@ from tkinter import ttk
 from moviepy.editor import VideoFileClip
 
 from maze.mazecalibration import MazeCalibration
-from maze.motiondetection import MotionDetector
 
 from maze.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from maze.utils import ToolTip
