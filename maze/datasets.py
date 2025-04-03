@@ -1,5 +1,7 @@
 import os
+import glob
 import json
+import random
 
 import cv2
 import numpy as np
@@ -12,6 +14,7 @@ from torch.utils.data import Dataset
 
 class FishHeatmapDataset(Dataset):
     def __init__(self, annotation_json, image_dir, heatmap_dir,
+                 background_dir=None, background_prob=0.3,
                  img_transform=None, joint_transform=None,
                  exclude_indices=None):
         self.samples = []
@@ -33,16 +36,38 @@ class FishHeatmapDataset(Dataset):
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             heatmap = np.load(heatmap_path)
 
-            self.samples.append((image, heatmap, file_name))
+            self.samples.append((image, heatmap))
 
         # Exclude flagged samples
         self.samples = [s for i, s in enumerate(self.samples) if i not in self.exclude_indices]
+
+        # Add background samples
+        if background_dir:
+            # Do glob for PNG files in the background directory
+            background_files = glob.glob(os.path.join(background_dir, '*.png'))
+            random.shuffle(background_files)
+
+            num_background_samples = min(len(background_files), int(len(self.samples) * background_prob))
+
+            # Add samples to the dataset
+            for i in range(num_background_samples):
+                img = cv2.imread(background_files[i])
+
+                if img is None:
+                    continue
+
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                heatmap = np.zeros((img.shape[0], img.shape[1]), dtype=np.float32)
+                self.samples.append((img, heatmap))
+        
+        # Shuffle the dataset
+        random.shuffle(self.samples)
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        image, heatmap, _ = self.samples[idx]
+        image, heatmap  = self.samples[idx]
 
         # Convert image to PIL (color image)
         image = Image.fromarray(image)
