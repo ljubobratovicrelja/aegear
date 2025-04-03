@@ -10,6 +10,7 @@ from PIL import Image
 
 import torch
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
 
 
 class FishHeatmapDataset(Dataset):
@@ -40,6 +41,7 @@ class FishHeatmapDataset(Dataset):
 
         # Exclude flagged samples
         self.samples = [s for i, s in enumerate(self.samples) if i not in self.exclude_indices]
+        print(f"Loaded {len(self.samples)} samples after excluding {len(self.exclude_indices)} flagged samples.")
 
         # Add background samples
         if background_dir:
@@ -48,6 +50,7 @@ class FishHeatmapDataset(Dataset):
             random.shuffle(background_files)
 
             num_background_samples = min(len(background_files), int(len(self.samples) * background_prob))
+            print(f"Adding {num_background_samples} background samples from {len(background_files)} available files.")
 
             # Add samples to the dataset
             for i in range(num_background_samples):
@@ -67,25 +70,26 @@ class FishHeatmapDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        image, heatmap  = self.samples[idx]
+        image, heatmap = self.samples[idx]
 
-        # Convert image to PIL (color image)
+        # Convert image and heatmap to PIL
         image = Image.fromarray(image)
-        heatmap_tensor = torch.from_numpy(heatmap).unsqueeze(0)  # [1, H, W]
+        heatmap_img = Image.fromarray((heatmap * 255).astype(np.uint8))  # 0–255 grayscale
 
-        # Apply same random transforms to both
+        # Apply joint transforms (same seed for both)
         if self.joint_transform:
             seed = np.random.randint(0, 10000)
             torch.manual_seed(seed)
             image = self.joint_transform(image)
             torch.manual_seed(seed)
-            heatmap_tensor = self.joint_transform(heatmap_tensor)
+            heatmap_img = self.joint_transform(heatmap_img)
 
-        # Individual transforms (image normalization etc.)
+
+        # Apply individual transforms
         if self.img_transform:
             image = self.img_transform(image)
 
-        # Clamp heatmap just in case and ensure float32
-        heatmap_tensor = heatmap_tensor.clamp(0, 1).float()
+        # Convert heatmap to tensor and normalize to [0,1]
+        heatmap_tensor = transforms.ToTensor()(heatmap_img).clamp(0, 1).float()  # shape [1, H, W]
 
         return image, heatmap_tensor
