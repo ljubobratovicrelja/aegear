@@ -138,7 +138,7 @@ class MainWindow(tk.Tk):
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Tracker setup.
-        model_default_path = "data/models/efficientunet/model_efficient_unet_v5.pth"
+        model_default_path = "data/models/model_efficient_unet_2025-04-04.pth"
         self._tracker = FishTracker(model_default_path, tracking_threshold=0.75, detection_threshold=0.8, debug=False)
 
         if initial_video == "":
