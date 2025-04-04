@@ -7,6 +7,7 @@ import numpy as np
 
 import torch
 import torchvision.transforms as transforms
+from torch.nn.functional import interpolate
 
 
 
@@ -44,15 +45,17 @@ class FishTracker:
     WINDOW_SIZE = 129
     # Number of max missed frames before we reset the last position.
     MAX_MISSED_FRAMES = 10
+    # The size of the tracking window.
+    TRACKER_WINDOW_SIZE = 129
 
     """A class to track fish in a video stream."""
 
-    def __init__(self, model_path, score_threshold=0.5, tracking_threshold=0.85, detection_threshold=0.95, search_stride=0.5, debug=False):
+    def __init__(self, model_path, tracking_threshold=0.85, detection_threshold=0.95, search_stride=0.5, debug=False):
         self._debug = debug
         self._stride = search_stride
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._transform = FishTracker._init_transform()
-        self.model = FishTracker._init_model(model_path)
+        self.model = self._init_model(model_path)
         self.tracking_threshold = tracking_threshold
         self.detection_threshold = detection_threshold
         self.last_hit = None
@@ -63,8 +66,7 @@ class FishTracker:
         """Initialize the transform."""
         return transforms.Compose([
             transforms.ToPILImage(),
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                 std=[0.229, 0.224, 0.225]),
@@ -89,23 +91,23 @@ class FishTracker:
         if self.last_hit is None or self.missed_frames > FishTracker.MAX_MISSED_FRAMES:
             self._debug_print("sliding")
             # Do a sliding window over the whole frame to try and find our fish.
-            results = self._sliding_window_predict(frame, mask)
-            if not results:
+            result = self._sliding_window_predict(frame, mask)
+            if not result:
                 return None
             
-            self.last_hit = results[0].centroid
-            confidence = results[0].confidence
+            self.last_hit = result[0].centroid
+            confidence = result[0].confidence
             self.missed_frames = 0
 
             # Initialize the tracker with the first hit.
-            self._reinit_tracker(frame, self.last_hit)
+            #self._reinit_tracker(frame, self.last_hit)
         else:
             self._debug_print("tracking")
             # Try getting a ROI around the last position.
             x, y = self.last_hit
             h, w = frame.shape[:2]
 
-            w_t = self.tracking_window // 2
+            w_t = self.TRACKER_WINDOW_SIZE // 2
 
             # Clamp center so that full ROI fits in frame
             x = max(w_t, min(x, w - w_t))
@@ -117,9 +119,10 @@ class FishTracker:
             y2 = int(y + w_t)
 
             roi = frame[y1:y2, x1:x2]
-            results = self._evaluate_model(roi, self.tracking_threshold)
+            result = self._evaluate_model(roi, self.tracking_threshold)
 
-            if not results:
+            if not result:
+                """
                 # If we don't find anything, we reset the last position and try again.
                 self.missed_frames += 1
                 self._debug_print("Missed tracking frame")
@@ -143,16 +146,21 @@ class FishTracker:
                     return (self.last_hit, confidence)
                 else:
                     return None
+                """
+                self.missed_frames += 1
+                self.last_hit = None
+                return None
+
+            result = result.global_coordinates((x1, y1))
             
-            best_result = results[0].global_coordinates((x1, y1))
-            self._debug_print(f"Found fish at ({best_result.centroid}) with score {best_result.score}")
+            self._debug_print(f"Found fish at ({result.centroid}) with confidence {result.confidence}")
 
             self.missed_frames = 0
 
-            self.last_hit = best_result.centroid
-            confidence = best_result.score
+            self.last_hit = result.centroid
+            confidence = result.confidence
 
-            self._reinit_tracker(frame, self.last_hit)
+            #self._reinit_tracker(frame, self.last_hit)
 
         return (self.last_hit, confidence)
 
@@ -213,13 +221,12 @@ class FishTracker:
                 results.append(global_result)
         
         # Sort by score
-        results.sort(key=lambda x: x.score, reverse=True)
+        results.sort(key=lambda x: x.confidence, reverse=True)
 
         return results
 
-    def get_centroid(heatmap):
-        # return None if heatmap is empty (sums to 0)
-        if heatmap.sum() < 1e-8:
+    def _get_centroid(heatmap):
+        if heatmap.sum() < 1e-6:
             return None
 
         b, _, _, w = heatmap.shape
@@ -230,7 +237,7 @@ class FishTracker:
         # Get confidence at the centroid
         confidence = heatmap[0, 0, y, x].item()
 
-        return confidence.float(), (x.float(), y.float())
+        return confidence, (x.int().item(), y.int().item())
 
     def _evaluate_model(self, window, threshold) -> Prediction:
         """Evaluate the model on a window of the image.
@@ -244,31 +251,33 @@ class FishTracker:
                     .unsqueeze(0)
 
         try:
-            output = self.model(image)
+            output = torch.sigmoid(self.model(image))
         except Exception as e:
             self._debug_print(f"Error in model evaluation: {e}")
             # If we get an error, we just return None.
             return None
         
-        result = FishTracker.get_centroid(output)
+        # Resize the output to the original window size.
+        output = interpolate(output, size=(self.WINDOW_SIZE, self.WINDOW_SIZE), mode='bilinear', align_corners=False)
+        
+        result = FishTracker._get_centroid(output)
 
         if result is None:
             self._debug_print("No fish detected")
             return None
         
-        confidence, centroid = result
+        (confidence, centroid) = result
 
+        h = output[0, 0, :, :].cpu().detach().numpy()
+        cv2.circle(h, centroid, 3, (255, 0, 0), -1)
+        cv2.imshow("Heatmap", h)
+        cv2.imshow("Window", window)
+        cv2.waitKey(1)
+        
         if confidence < threshold:
             self._debug_print(f"Confidence {confidence} is below threshold {threshold}")
             return None
         
-        # Test if centroid is too far from the center of the window.
-        # If it is, this is likely a false positive.
-        if centroid[0] < 0.2 * self.window_size[0] or centroid[0] > 0.8 * self.window_size[0] \
-            or centroid[1] < 0.2 * self.window_size[1] or centroid[1] > 0.8 * self.window_size[1]:
-            self._debug_print(f"Centroid {centroid} is too far from the center of the window")
-            return None 
-
         return Prediction(confidence, centroid)
 
     def _reinit_tracker(self, frame, hit): 
