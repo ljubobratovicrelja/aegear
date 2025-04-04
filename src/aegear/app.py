@@ -19,7 +19,12 @@ from aegear.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from aegear.tracker import FishTracker
 
 
+
+DEFAULT_CALIBRATION_FILE= "data/calibration.xml"
+MODEL_PATH = "data/models/model_efficient_unet_2025-04-04.pth"
+
 class TrackingBar(tk.Canvas):
+
     def __init__(self, parent, frames, **kwargs):
         super(TrackingBar, self).__init__(parent, bg='gray', **kwargs)
         self.total_frames = frames
@@ -129,7 +134,7 @@ class MainWindow(tk.Tk):
         self._screen_points = []
 
         # initiate calibration utility
-        self._scene_calibration = SceneCalibration("data/calibration.xml")
+        self._scene_calibration = SceneCalibration(DEFAULT_CALIBRATION_FILE)
 
         self.dialog_window = tk.Toplevel(self)
         self.dialog_window.withdraw()
@@ -138,8 +143,7 @@ class MainWindow(tk.Tk):
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Tracker setup.
-        model_default_path = "data/models/model_efficient_unet_2025-04-04.pth"
-        self._tracker = FishTracker(model_default_path, tracking_threshold=0.75, detection_threshold=0.8, debug=False)
+        self._tracker = FishTracker(MODEL_PATH, tracking_threshold=0.75, detection_threshold=0.8, debug=False)
 
         if initial_video == "":
             # warning dialog and close the app
