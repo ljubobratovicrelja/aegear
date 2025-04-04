@@ -231,7 +231,7 @@ class EfficientUNet(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Dropout2d(0.3),
+            #nn.Dropout2d(0.2),
         )
 
     def forward(self, x):
@@ -247,4 +247,5 @@ class EfficientUNet(nn.Module):
         d1 = self.up1(d2) + x1  # [B, 16, 112, 112]
         d0 = self.up0(d1)       # [B, 8, 224, 224]
 
-        return torch.sigmoid(self.out(d0))   # [B, 1, 224, 224]
+        #return torch.sigmoid(self.out(d0))   # [B, 1, 224, 224]
+        return self.out(d0)   # [B, 1, 224, 224]
