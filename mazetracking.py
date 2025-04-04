@@ -27,7 +27,7 @@ from tkinter import ttk
 
 from moviepy.editor import VideoFileClip
 
-from maze.mazecalibration import MazeCalibration
+from maze.calibration import SceneCalibration
 
 from maze.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from maze.utils import ToolTip
@@ -124,54 +124,37 @@ class MainWindow(tk.Tk):
         # set window Title
         self.title("Maze Tracking")
 
-        # width of the image, to be updated upon first frame load
         self._current_frame = None
         self._display_image = None
         self._image_width = 0
         self._playing = False
         self._calibrated = False
         self._calibration_running = False
-        self._pixel_to_cm_ratio = 1.0  # default to 1.0
+        self._pixel_to_cm_ratio = 1.0
         self._first_frame_position = None
 
         # drawing variable
         self._draw_trajectory = tk.BooleanVar()
         self._draw_trajectory.set(True)
 
-        self._save_tracking_check = tk.BooleanVar()
-        self._save_tracking_check.set(True)
-
-        self._tracking_crosscheck = tk.BooleanVar()
-        self._tracking_crosscheck.set(True)
-
         self._fish_tracking = {}
         self._trajectory_smooth_size = 9
         self._trajectory_frame_skip = 3
 
-        self._classification_threshold = 0.99  # we can expect classifier to be very confident
-
-        self._motion_detection_min_area = 800
-        self._motion_detection_max_area = 4000
-
         # screen points for calibration and other purposes
         self._screen_points = []
 
-        # initiate maze calibration utility
-        self._maze_calibration = MazeCalibration("data/calibration.xml")
-
+        # initiate calibration utility
+        self._scene_calibration = SceneCalibration("data/calibration.xml")
 
         self.dialog_window = tk.Toplevel(self)
         self.dialog_window.withdraw()
 
         self.dialog_window.title("Load Video")
-
-        #### DEBUG PART ######
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
-        #### DEBUG PART END ######
-
         # Tracker setup.
-        model_default_path = "data/models/efficientunet/model_efficient_unet_v4.pth"
+        model_default_path = "data/models/efficientunet/model_efficient_unet_v5.pth"
         self._tracker = FishTracker(model_default_path, tracking_threshold=0.75, detection_threshold=0.8, debug=False)
 
         if initial_video == "":
@@ -245,22 +228,17 @@ class MainWindow(tk.Tk):
         self.run_tracking_button = tk.Button(self.right_frame, text="Run Tracking", command=self._run_tracking, state=tk.DISABLED)
         self.run_tracking_button.pack(side=tk.LEFT)
 
-        # checkbox for tracking crosschecking
-        self.crosscheck_checkbox = tk.Checkbutton(self.right_frame, text="Crosscheck", variable=self._tracking_crosscheck)
-        self.crosscheck_checkbox.pack(side=tk.LEFT)
-
-        # set tooltip for crosscheck checkbox
-        self.chrosscheck_tooltip = ToolTip(self.crosscheck_checkbox, "This runs classification on mutliple consecutive frames to ensure that the fish is correctly identified.")
-        self.crosscheck_checkbox.bind("<Enter>", self.chrosscheck_tooltip.display_tooltip)
-        self.crosscheck_checkbox.bind("<Leave>", self.chrosscheck_tooltip.hide_tooltip)
-
         self.reset_tracking_button = tk.Button(self.right_frame, text="Reset Tracking", command=self._reset_tracking)
         self.reset_tracking_button.pack(side=tk.LEFT)
 
-        # scale for classification threshold
-        self.classification_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100, orient=tk.HORIZONTAL, label="Classification Threshold", command=self._classification_threshold_changed)
-        self.classification_threshold_scale.set(self._classification_threshold * 100)
-        self.classification_threshold_scale.pack(side=tk.LEFT)
+        # scale for detection threshold
+        self.tracking_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100, orient=tk.HORIZONTAL, label="Tracking Threshold", command=self._tracking_threshold_changed)
+        self.tracking_threshold_scale.set(int(self._tracker.tracking_threshold * 100.0))
+        self.tracking_threshold_scale.pack(side=tk.LEFT)
+
+        self.detection_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100, orient=tk.HORIZONTAL, label="Detection Threshold", command=self._detection_threshold_changed)
+        self.detection_threshold_scale.set(int(self._tracker.detection_threshold * 100.0))
+        self.detection_threshold_scale.pack(side=tk.LEFT)
 
         # scale for trajectory smoothing
         self.smooth_trajectory_scale = tk.Scale(self.right_frame, from_=1, to=100, orient=tk.HORIZONTAL, label="Trajectory Smoothing", command=self._trajectory_smooth_size_changed)
@@ -271,15 +249,6 @@ class MainWindow(tk.Tk):
         self.tracking_frame_scale = tk.Scale(self.right_frame, from_=1, to=100, orient=tk.HORIZONTAL, label="Tracking Frame Skip", command=self._trajectory_frame_skip_changed)
         self.tracking_frame_scale.set(self._trajectory_frame_skip)
         self.tracking_frame_scale.pack(side=tk.LEFT)
-
-        # scale for min and max area
-        self.motion_detection_min_area_scale = tk.Scale(self.right_frame, from_=0, to=10000, orient=tk.HORIZONTAL, label="Min Area", command=self._motion_detection_min_area_changed)
-        self.motion_detection_min_area_scale.set(self._motion_detection_min_area)
-        self.motion_detection_min_area_scale.pack(side=tk.LEFT)
-
-        self.motion_detection_max_area_scale = tk.Scale(self.right_frame, from_=0, to=10000, orient=tk.HORIZONTAL, label="Max Area", command=self._motion_detection_max_area_changed)
-        self.motion_detection_max_area_scale.set(self._motion_detection_max_area)
-        self.motion_detection_max_area_scale.pack(side=tk.LEFT)
 
         self.draw_trajectory_checkbox = tk.Checkbutton(self.right_frame, text="Draw Trajectory", variable=self._draw_trajectory)
         self.draw_trajectory_checkbox.pack(side=tk.LEFT)
@@ -314,6 +283,7 @@ class MainWindow(tk.Tk):
         self.file_menu.add_command(label="Load Video", command=self._load_video)
         self.file_menu.add_command(label="Load Tracking", command=self._load_tracking)
         self.file_menu.add_command(label="Save Tracking", command=self._save_tracking)
+        self.file_menu.add_command(label="Load Scene Reference", command=self._scene_calibration.load_scene_reference)
         self.file_menu.add_command(label="Exit", command=self.destroy)
 
         self.menu_bar.add_cascade(label="File", menu=self.file_menu)
@@ -354,8 +324,11 @@ class MainWindow(tk.Tk):
 
         self.update_gui()
     
-    def _classification_threshold_changed(self, value):
-        self._classification_threshold = float(value) / 100.0
+    def _tracking_threshold_changed(self, value):
+        self._tracker.tracking_threshold = float(value) / 100.0
+
+    def _detection_threshold_changed(self, value):
+        self._tracker.detection_threshold = float(value) / 100.0
     
     def _trajectory_smooth_size_changed(self, value):
         v = int(value)
@@ -373,14 +346,6 @@ class MainWindow(tk.Tk):
     def _trajectory_frame_skip_changed(self, value):
         v = int(value)
         self._trajectory_frame_skip = v
-    
-    def _motion_detection_min_area_changed(self, value):
-        v = int(value)
-        self._motion_detection_min_area = v
-    
-    def _motion_detection_max_area_changed(self, value):
-        v = int(value)
-        self._motion_detection_max_area = v
     
     def _run_tracking(self):
         if self._tracker is None:
@@ -615,7 +580,7 @@ class MainWindow(tk.Tk):
     
     def _do_calibration(self):
         try:
-            self._pixel_to_cm_ratio = self._maze_calibration.calibrate(self._screen_points)
+            self._pixel_to_cm_ratio = self._scene_calibration.calibrate(self._screen_points)
 
             self._calibrated = True
             self._calibration_running = False
@@ -680,7 +645,7 @@ class MainWindow(tk.Tk):
     def _read_frame(self, frame_number):
         frame = self.clip.get_frame(float(frame_number) / float(self.clip.fps))
         if self._calibrated:
-            frame = self._maze_calibration.rectify_image(frame)
+            frame = self._scene_calibration.rectify_image(frame)
 
         return frame
 
