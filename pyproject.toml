@@ -1,0 +1,31 @@
+[project]
+name = "aegear"
+version = "0.1.0"
+description = "Computer vision toolkit for fish tracking and behavioral analysis in aquaculture research environments."
+authors = [
+    { name = "Relja Ljubobratovic", email = "ljubobratovic.relja@gmail.com" },
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib==3.7.2",
+    "moviepy==2.1.2",
+    "numpy==2.2.4",
+    "opencv-contrib-python==4.11.0.86",
+    "opencv-python==4.11.0.86",
+    "Pillow==11.1.0",
+    "pyinstaller==6.12.0",
+    "scipy==1.15.2",
+    "torch==2.6.0+cu124",
+    "torchvision==0.21.0+cu124",
+    "tqdm==4.67.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/ljubobratovicrelja/aegear"
+Repository = "https://github.com/ljubobratovicrelja/aegear"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
