@@ -172,7 +172,7 @@ class MainWindow(tk.Tk):
 
         # Tracker setup.
         model_default_path = "data/models/efficientunet/model_efficient_unet_v4.pth"
-        self._tracker = FishTracker(model_default_path, tracking_threshold=0.7, detection_threshold=0.7, debug=False)
+        self._tracker = FishTracker(model_default_path, tracking_threshold=0.75, detection_threshold=0.8, debug=False)
 
         if initial_video == "":
             # warning dialog and close the app
