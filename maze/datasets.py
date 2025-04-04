@@ -2,6 +2,8 @@ import os
 import glob
 import json
 import random
+from pathlib import Path
+from typing import Tuple
 
 import cv2
 import numpy as np
@@ -15,7 +17,7 @@ import torchvision.transforms.functional as TF
 
 
 class FishHeatmapDataset(Dataset):
-    def __init__(self, annotation_json, image_dir, heatmap_dir,
+    def __init__(self, annotation_data, image_dir, heatmap_dir,
                  background_dir=None, background_prob=0.3,
                  joint_transform=None, augmentation_transform=None,
                  exclude_indices=None):
@@ -24,10 +26,7 @@ class FishHeatmapDataset(Dataset):
         self.augmentation_transform = augmentation_transform
         self.exclude_indices = set(exclude_indices or [])
 
-        with open(annotation_json, 'r') as f:
-            coco_data = json.load(f)
-
-        for img_info in coco_data['images']:
+        for img_info in annotation_data['images']:
             file_name = img_info['file_name']
             img_path = os.path.join(image_dir, file_name)
             heatmap_path = os.path.join(heatmap_dir, os.path.splitext(file_name)[0] + '.npy')
@@ -99,6 +98,59 @@ class FishHeatmapDataset(Dataset):
         heatmap_tensor = transforms.ToTensor()(heatmap_img).clamp(0, 1).float()  # shape [1, H, W]
 
         return image, heatmap_tensor
+
+def split_coco_annotations(
+    coco_json_path: Path,
+    train_ratio: float = 0.8,
+    seed: int = 42
+) -> Tuple[dict, dict]:
+    """
+    Loads a COCO JSON and splits it into train/val dictionaries based on image-level split.
+    
+    Args:
+        coco_json_path (Path): Path to the COCO annotations.json.
+        train_ratio (float): Ratio of images to assign to the training set.
+        seed (int): Random seed for reproducibility.
+
+    Returns:
+        Tuple[dict, dict]: (train_dict, val_dict)
+    """
+    with open(coco_json_path, 'r') as f:
+        coco = json.load(f)
+
+    images = coco["images"]
+    annotations = coco["annotations"]
+    categories = coco["categories"]
+
+    # Reproducible shuffle
+    random.seed(seed)
+    shuffled_images = images[:]
+    random.shuffle(shuffled_images)
+
+    split_idx = int(len(shuffled_images) * train_ratio)
+    train_images = shuffled_images[:split_idx]
+    val_images = shuffled_images[split_idx:]
+
+    train_img_ids = {img["id"] for img in train_images}
+    val_img_ids = {img["id"] for img in val_images}
+
+    # Filter annotations
+    train_annotations = [ann for ann in annotations if ann["image_id"] in train_img_ids]
+    val_annotations = [ann for ann in annotations if ann["image_id"] in val_img_ids]
+
+    train_dict = {
+        "images": train_images,
+        "annotations": train_annotations,
+        "categories": categories
+    }
+
+    val_dict = {
+        "images": val_images,
+        "annotations": val_annotations,
+        "categories": categories
+    }
+
+    return train_dict, val_dict
 
 class RandomPoissonNoise(torch.nn.Module):
     def __init__(self, p=0.15):
