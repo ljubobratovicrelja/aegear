@@ -2,11 +2,7 @@
 
 **Tracking and analyzing fish behavior in controlled aquaculture environments**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)  
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)  
-[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)  
-[![Documentation](https://img.shields.io/badge/docs-link-blue.svg)](#)  
-[![PyPI](https://img.shields.io/badge/pypi-coming_soon-orange.svg)](#)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)[![Documentation](https://img.shields.io/badge/docs-link-blue.svg)](#)[![PyPI](https://img.shields.io/badge/pypi-coming_soon-orange.svg)](#)
 
 ---
 
@@ -36,7 +32,7 @@ The name is a play on **Ægir**, the Norse god of the sea, evoking depth, observ
 
 ## 📚 Publications & Citations
 
-Aegear was developed for the larviculture experiments led by Fazekas et al. (2025). Citation details:
+Aegear was originally developed for the larviculture experiments led by Fazekas et al. (2025). Citation details:
 
 > Fazekas, G., Müller, T., Berzi-Nagy, L., Ljubobratović, R., Stanivuk, J., Fazekas, D. L., Káldy, J., Vass, N.,  
 > & Ljubobratović, U. (2025). *The feeding strategy and environmental enrichment modulate the locomotory  
@@ -44,14 +40,8 @@ Aegear was developed for the larviculture experiments led by Fazekas et al. (202
 > combination of larviculture strategies*. Research Center for Fisheries and Aquaculture (HAKI),  
 > Hungarian University of Agriculture and Life Sciences (MATE), Szarvas, Hungary.
 
-Other core references:
-
-- Zivkovic & van der Heijden (2006), background subtraction with adaptive KNN  
-- Zhang (2000), flexible camera calibration  
-- Ronneberger et al. (2015), U-Net architecture  
-- Tan & Le (2019), EfficientNet backbone
-
-(See full citations in `aegear/__init__.py`)
+However, in the meantime it has evolved quite so much in its methods and results that are achieved, but the objective
+itself is unchanged.
 
 ---
 
@@ -130,4 +120,4 @@ pip install -r requirements.txt
 
 ## 🧠 Acknowledgments
 
-Special thanks to the HAKI research team for their trust and scientific collaboration, and to the dedicated aquaculture biologists whose expertise shaped the problem domain.
+Special thanks Gina and Uros from the HAKI research team for their trust and scientific collaboration on this exciting project!
