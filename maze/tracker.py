@@ -66,7 +66,8 @@ class FishTracker:
         """Initialize the transform."""
         return transforms.Compose([
             transforms.ToPILImage(),
-            transforms.Resize(224),
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                 std=[0.229, 0.224, 0.225]),
@@ -147,8 +148,8 @@ class FishTracker:
                 else:
                     return None
                 """
-                self.missed_frames += 1
                 self.last_hit = None
+
                 return None
 
             result = result.global_coordinates((x1, y1))
@@ -185,14 +186,14 @@ class FishTracker:
         h, w = frame.shape[:2]
         results = []
 
-        w = self.WINDOW_SIZE
-        stride = int(self._stride * w)
+        w2 = self.WINDOW_SIZE
+        stride = int(self._stride * w2)
 
         for y in range(0, h, stride):
             for x in range(0, w, stride):
 
                 if mask is not None:
-                    mask_roi = mask[y:y+w, x:x+w]
+                    mask_roi = mask[y:y+w2, x:x+w2]
                     mask_sum = mask_roi.sum()
 
                     # Check if the window is in the mask.
@@ -200,12 +201,12 @@ class FishTracker:
                         continue
                 
                 try:
-                    window = frame[y:y+w, x:x+w]
+                    window = frame[y:y+w2, x:x+w2]
                 except:
                     # If we go out of bounds, we skip this window.
                     continue
 
-                if window.shape[0] != w or window.shape[1] != w:
+                if window.shape[0] != w2 or window.shape[1] != w2:
                     continue
 
                 result = self._evaluate_model(window, self.detection_threshold)
@@ -246,12 +247,12 @@ class FishTracker:
         """
 
         # Prepare the input.
-        image = self._transform(cv2.cvtColor(window, cv2.COLOR_BGR2RGB)) \
+        input = self._transform(cv2.cvtColor(window, cv2.COLOR_BGR2RGB)) \
                     .to(self._device) \
                     .unsqueeze(0)
 
         try:
-            output = torch.sigmoid(self.model(image))
+            output = torch.sigmoid(self.model(input))
         except Exception as e:
             self._debug_print(f"Error in model evaluation: {e}")
             # If we get an error, we just return None.
@@ -264,18 +265,25 @@ class FishTracker:
 
         if result is None:
             self._debug_print("No fish detected")
+            if self._debug:
+                h = output[0, 0, :, :].cpu().detach().numpy()
+                cv2.circle(h, centroid, 3, (255, 0, 0), -1)
+                cv2.imshow("Heatmap", h)
+                cv2.imshow("Window", window)
+                cv2.waitKey(1)
             return None
         
         (confidence, centroid) = result
 
-        h = output[0, 0, :, :].cpu().detach().numpy()
-        cv2.circle(h, centroid, 3, (255, 0, 0), -1)
-        cv2.imshow("Heatmap", h)
-        cv2.imshow("Window", window)
-        cv2.waitKey(1)
         
         if confidence < threshold:
             self._debug_print(f"Confidence {confidence} is below threshold {threshold}")
+            if self._debug:
+                h = output[0, 0, :, :].cpu().detach().numpy()
+                cv2.circle(h, centroid, 3, (255, 0, 0), -1)
+                cv2.imshow("Heatmap", h)
+                cv2.imshow("Window", window)
+                cv2.waitKey(1)
             return None
         
         return Prediction(confidence, centroid)

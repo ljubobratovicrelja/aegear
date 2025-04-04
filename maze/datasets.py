@@ -11,16 +11,17 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
+import torchvision.transforms.functional as TF
 
 
 class FishHeatmapDataset(Dataset):
     def __init__(self, annotation_json, image_dir, heatmap_dir,
                  background_dir=None, background_prob=0.3,
-                 img_transform=None, joint_transform=None,
+                 joint_transform=None, augmentation_transform=None,
                  exclude_indices=None):
         self.samples = []
-        self.img_transform = img_transform
         self.joint_transform = joint_transform
+        self.augmentation_transform = augmentation_transform
         self.exclude_indices = set(exclude_indices or [])
 
         with open(annotation_json, 'r') as f:
@@ -84,12 +85,30 @@ class FishHeatmapDataset(Dataset):
             torch.manual_seed(seed)
             heatmap_img = self.joint_transform(heatmap_img)
 
+        # Turn image to tensor and normalize to [0,1]
+        image = transforms.ToTensor()(image).clamp(0, 1).float()
+        
+        if self.augmentation_transform:
+            image = self.augmentation_transform(image.unsqueeze(0)).squeeze(0)
 
-        # Apply individual transforms
-        if self.img_transform:
-            image = self.img_transform(image)
+        # Standardize the image.
+        image = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225])(image)
 
         # Convert heatmap to tensor and normalize to [0,1]
         heatmap_tensor = transforms.ToTensor()(heatmap_img).clamp(0, 1).float()  # shape [1, H, W]
 
         return image, heatmap_tensor
+
+class RandomPoissonNoise(torch.nn.Module):
+    def __init__(self, p=0.15):
+        super().__init__()
+        self.p = p
+
+    def forward(self, x):
+        if not self.training or torch.rand(1).item() > self.p:
+            return x
+
+        x_scaled = x * 255.0
+        noise = torch.poisson(x_scaled)
+        return torch.clamp(noise / 255.0, 0.0, 1.0)

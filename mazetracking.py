@@ -171,8 +171,8 @@ class MainWindow(tk.Tk):
         #### DEBUG PART END ######
 
         # Tracker setup.
-        model_default_path = "data/models/efficientunet/model_efficient_unet_v3.pth"
-        self._tracker = FishTracker(model_default_path, tracking_threshold=0.5, detection_threshold=0.5, debug=True)
+        model_default_path = "data/models/efficientunet/model_efficient_unet_v4.pth"
+        self._tracker = FishTracker(model_default_path, tracking_threshold=0.7, detection_threshold=0.7, debug=False)
 
         if initial_video == "":
             # warning dialog and close the app
@@ -461,11 +461,11 @@ class MainWindow(tk.Tk):
             background_mask = bck_substractor.apply(gframe_image)
 
             # Do some morphology to remove noise
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
             # We close to remove noise and dilate to make the mask less sensitive.
             background_mask = cv2.erode(background_mask, kernel, iterations=1)
-            background_mask = cv2.dilate(background_mask, kernel, iterations=2) 
+            background_mask = cv2.dilate(background_mask, kernel, iterations=1) 
 
             # Finally threshold to be 100% sure we have a binary mask
             _, background_mask = cv2.threshold(background_mask, 127, 255, cv2.THRESH_BINARY)
@@ -477,20 +477,18 @@ class MainWindow(tk.Tk):
 
             result = self._tracker.track(frame_image, mask=background_mask)
             
-            if result is None:
-                continue
+            if result is not None:
+                (coordinates, score) = result
+                
+                self._fish_tracking[frame_id] = coordinates
 
-            (coordinates, score) = result
-            
-            self._fish_tracking[frame_id] = coordinates
+                self.track_bar.mark_processed(frame_id)
 
-            self.track_bar.mark_processed(frame_id)
+                # draw coordinates on our draw_image
+                cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
 
-            # draw coordinates on our draw_image
-            cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
-
-            # update the tracking_listbox - add this positive to the list
-            self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, score))
+                # update the tracking_listbox - add this positive to the list
+                self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, score))
 
             # update the image
             self._display_image = draw_image.copy()
