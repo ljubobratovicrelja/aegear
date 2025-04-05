@@ -70,16 +70,13 @@ torchvision==0.21.0+cu124
 aegear/
 │   __init__.py            # Main module with detailed project description
 │
-├── calibration/           # Scripts for intrinsic/extrinsic camera calibration
-├── tools/                 # Training ROI labeling tools, background blending
+├── tools/                 # Training ROI labeling tools, camera calibration
 ├── notebooks/             # Jupyter notebooks for training, validation, COCO data prep
 │   ├── training.ipynb
 │   ├── coco_prep.ipynb
 │
-├── models/                # Saved weights and training checkpoints
-├── data/                  # COCO-style datasets and training samples
-│   ├── images/
-│   └── annotations.json
+├── data/                  # Various data points required for the project.
+|   ├── models/            # Saved weights and training checkpoints
 ```
 
 ---
@@ -88,15 +85,6 @@ aegear/
 
 - Currently limited to **single-object tracking**; no support yet for multi-class or multi-fish tracking.
 - The detection model is specialized for Russian sturgeon and must be retrained for other species.
-
----
-
-## 📈 Future Work
-
-- [ ] Extend detection to multi-species, multi-object support  
-- [ ] Add fish ID tracking with re-identification (Re-ID)  
-- [ ] Export tracking results to standardized formats (CSV, JSON)  
-- [ ] Enable live stream tracking from connected cameras  
 
 ---
 
