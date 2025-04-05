@@ -4,6 +4,10 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)[![Documentation](https://img.shields.io/badge/docs-link-blue.svg)](#)[![PyPI](https://img.shields.io/badge/pypi-coming_soon-orange.svg)](#)
 
+<p align="center">
+  <img src="media/logo.png" alt="ÆGEAR Logo" width="500"/>
+</p>
+
 ---
 
 ## 🧠 Project Overview
