@@ -18,8 +18,10 @@ dependencies = [
     "scipy==1.11.0",
     "torch>=2.6,<2.7",
     "torchvision>=0.21,<0.22",
-    "tqdm>=4.65.0",
 ]
+
+[project.optional-dependencies]
+dev = ["kornia>=0.8.0", "tqdm>=4.65.0"]
 
 [project.urls]
 Homepage = "https://github.com/ljubobratovicrelja/aegear"
