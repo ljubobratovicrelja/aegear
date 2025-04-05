@@ -76,7 +76,7 @@ class SceneCalibration:
     
     def calibrate(self, screen_pts: List[Tuple[float, float]]) -> float:
         """
-        Run the maze characterization.
+        Run the scene characterization.
         
         Parameters
         ----------

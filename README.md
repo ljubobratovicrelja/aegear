@@ -111,7 +111,7 @@ This project is licensed under the [MIT License](LICENSE).
 Aegear will be published on PyPI. Until then:
 
 ```
-git clone https://github.com/your-username/aegear.git  
+git clone https://github.com/ljubobratovicrelja/aegear.git  
 cd aegear  
 pip install -r requirements.txt
 ```

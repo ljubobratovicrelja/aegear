@@ -111,7 +111,7 @@ class MainWindow(tk.Tk):
         self.withdraw()
 
         # set window Title
-        self.title("Maze Tracking")
+        self.title("Aegear")
 
         self._current_frame = None
         self._display_image = None
@@ -483,7 +483,7 @@ class MainWindow(tk.Tk):
         self.update_gui()
     
     def _about(self):
-        messagebox.showinfo("About", "Maze Tracking\n\nAuthor: Relja Ljubobratovic\nEmail: ljubobratovic.relja@gmail.com")
+        messagebox.showinfo("About", "Aegear\n\nAuthor: Relja Ljubobratovic\nEmail: ljubobratovic.relja@gmail.com")
     
     def _load_tracking(self):
         pass
@@ -560,7 +560,7 @@ class MainWindow(tk.Tk):
         # redraw frame to clear potentially preset calibration
         self.update_gui()
 
-        self.status_bar['text'] = "Calibration started - left click to select corner points of the maze."
+        self.status_bar['text'] = "Calibration started - left click to select corner points of the scene."
         self.status_bar['fg'] = "orange"
 
         self.image_label.bind("<Button-1>", self._calibration_click)
