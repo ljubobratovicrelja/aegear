@@ -1,4 +1,5 @@
 import sys
+import json
 import threading
 import time
 
@@ -134,15 +135,15 @@ class AegearMainWindow(tk.Tk):
         self.calibration_button.pack(side=tk.LEFT)
 
         self.set_track_start_button = tk.Button(self.right_frame, text="Set Track Start",
-                                                command=self._set_track_start, state=tk.DISABLED)
+                                                command=self._set_track_start, state=tk.NORMAL)
         self.set_track_start_button.pack(side=tk.LEFT)
 
         self.set_track_end_button = tk.Button(self.right_frame, text="Set Track End",
-                                              command=self._set_track_end, state=tk.DISABLED)
+                                              command=self._set_track_end, state=tk.NORMAL)
         self.set_track_end_button.pack(side=tk.LEFT)
 
         self.run_tracking_button = tk.Button(self.right_frame, text="Run Tracking",
-                                             command=self._run_tracking, state=tk.DISABLED)
+                                             command=self._run_tracking, state=tk.NORMAL)
         self.run_tracking_button.pack(side=tk.LEFT)
 
         self.reset_tracking_button = tk.Button(self.right_frame, text="Reset Tracking",
@@ -218,6 +219,7 @@ class AegearMainWindow(tk.Tk):
         self.file_menu.add_command(label="Load Video", command=self._load_video)
         self.file_menu.add_command(label="Load Tracking", command=self._load_tracking)
         self.file_menu.add_command(label="Save Tracking", command=self._save_tracking)
+        self.file_menu.add_command(label="Save Trajectory", command=self._save_trajectory)
         self.file_menu.add_command(label="Load Scene Reference", command=self._load_scene_reference)
         self.file_menu.add_command(label="Exit", command=self.destroy)
         self.menu_bar.add_cascade(label="File", menu=self.file_menu)
@@ -362,11 +364,11 @@ class AegearMainWindow(tk.Tk):
 
             result = self._tracker.track(frame_image, mask=background_mask)
             if result is not None:
-                (coordinates, score) = result
-                self._fish_tracking[frame_id] = coordinates
+                (coordinates, confidence) = result
+                self._fish_tracking[frame_id] = (coordinates, confidence)
                 self.track_bar.mark_processed(frame_id)
                 cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
-                self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, score))
+                self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
 
             self._display_image = draw_image.copy()
             self.update_image(self._display_image)
@@ -405,12 +407,97 @@ class AegearMainWindow(tk.Tk):
         messagebox.showinfo("About", "Aegear\n\nAuthor: Relja Ljubobratovic\nEmail: ljubobratovic.relja@gmail.com")
 
     def _load_tracking(self):
-        # TODO: Implement loading of tracking data.
-        pass
+        filename = filedialog.askopenfilename(defaultextension=".json",
+                                              filetypes=[("JSON files", "*.json")])
+        if filename == "":
+            messagebox.showerror("Error", "No file selected.")
+            return
+        
+        try:
+            with open(filename, 'r') as f:
+                file_dict = json.load(f)
+                if "video" not in file_dict or "tracking" not in file_dict:
+                    raise ValueError("Invalid file format.")           
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load tracking data: {e}")
+            return
+        
+        self._fish_tracking = {}
+        for item in file_dict["tracking"]:
+            frame_id = item["frame_id"]
+            coordinates = tuple(item["coordinates"])
+            confidence = item["confidence"]
+            self._fish_tracking[frame_id] = (coordinates, confidence)
+            self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
 
     def _save_tracking(self):
-        # TODO: Implement saving of tracking data.
-        pass
+        if self._fish_tracking is None or len(self._fish_tracking) == 0:
+            messagebox.showerror("Error", "No tracking data available.")
+            return
+
+        filename = filedialog.asksaveasfilename(defaultextension=".json",
+                                                  filetypes=[("JSON files", "*.json")])
+        if filename == "":
+            messagebox.showerror("Error", "No file selected.")
+            return
+        
+        file_dict = {
+            "video": self.clip.filename,
+            "tracking": []
+        }
+
+        for frame_id, (coordinates, confidence) in self._fish_tracking.items():
+            file_dict["tracking"].append({
+                "frame_id": frame_id,
+                "coordinates": coordinates,
+                "confidence": confidence
+            })
+        
+        with open(filename, 'w') as f:
+            json.dump(file_dict, f, indent=4)
+
+        self.status_bar['text'] = "Tracking data saved to {}".format(filename)
+        self.status_bar['fg'] = "green"
+
+    def _save_trajectory(self):
+        if self._fish_tracking is None or len(self._fish_tracking) == 0:
+            messagebox.showerror("Error", "No tracking data available.")
+            return
+
+        filename = filedialog.asksaveasfilename(defaultextension=".json",
+                                                  filetypes=[("JSON files", "*.json")])
+        if filename == "":
+            messagebox.showerror("Error", "No file selected.")
+            return
+        
+        file_dict = {
+            "video": self.clip.filename,
+            "trajectory": []
+        }
+
+        trajectory = []
+        for (coordinates, _) in self._fish_tracking.values():
+            trajectory.append(coordinates)
+        
+        trajectory = smoothTrajectory(trajectory, self._trajectory_smooth_size)
+        start_frame = next(iter(self._fish_tracking))
+
+        if start_frame is None:
+            raise ValueError("Failed finding starting frame for trajectory.")
+
+        for (frame_id, coordinate) in enumerate(trajectory):
+            frame_id += start_frame
+            file_dict["trajectory"].append({
+                "frame_id": frame_id,
+                "coordinates": coordinate
+            })
+        
+        with open(filename, 'w') as f:
+            json.dump(file_dict, f, indent=4)
+
+        self.status_bar['text'] = "Trajectory saved to {}".format(filename)
+        self.status_bar['fg'] = "green"
 
     def _load_scene_reference(self):
         # TODO: Implement loading of a scene reference for calibration.
@@ -624,7 +711,7 @@ class AegearMainWindow(tk.Tk):
         # Draw current tracked point if available.
         frame_id = self._get_current_frame_number()
         if frame_id in self._fish_tracking:
-            (x, y) = self._fish_tracking[frame_id]
+            ((x, y), _) = self._fish_tracking[frame_id]
             image = cv2.circle(image, (x, y), 12, (0, 255, 0))
 
         # Draw trajectory if enabled.
@@ -634,7 +721,9 @@ class AegearMainWindow(tk.Tk):
             for frame_id in tracked_frames:
                 if frame_id >= self._get_current_frame_number():
                     break
-                trajectory.append(self._fish_tracking[frame_id])
+                centroid, _ = self._fish_tracking[frame_id]
+                trajectory.append(centroid)
+
             s_trajectory = smoothTrajectory(trajectory, self._trajectory_smooth_size)
             travelDistance = trajectoryLength(s_trajectory) * self._pixel_to_cm_ratio
             self.distance_status_bar['text'] = "Distance: {} cm".format(travelDistance)
