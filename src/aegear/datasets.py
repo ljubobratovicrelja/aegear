@@ -7,8 +7,10 @@ from typing import Tuple
 
 import cv2
 import numpy as np
+from scipy.signal import savgol_filter
 
 from PIL import Image
+from moviepy.video.io.VideoFileClip import VideoFileClip
 
 import torch
 from torch.utils.data import Dataset
@@ -165,3 +167,116 @@ class RandomPoissonNoise(torch.nn.Module):
         x_scaled = x * 255.0
         noise = torch.poisson(x_scaled)
         return torch.clamp(noise / 255.0, 0.0, 1.0)
+
+
+class FishHeatmapSequenceDataset(Dataset):
+    def __init__(
+        self,
+        tracking_json_path,
+        unet_model,
+        seq_len=5,
+        max_span=50,
+        min_confidence=0.5,
+        crop_size=129,
+        transform=None,
+        device="cuda"
+    ):
+        """
+        Args:
+            tracking_json_path (str): Path to the JSON with tracking data.
+            unet_model (nn.Module): Trained EfficientUNet model.
+            seq_len (int): Number of consecutive tracking points to use.
+            max_span (int): Max frame span allowed within a sequence.
+            min_confidence (float): Minimum confidence to use a tracking point.
+            crop_size (int): Size of the square ROI to extract around centroid.
+            transform: Torchvision transform to apply to crops before U-Net.
+            device (str): Device to place input tensors and model.
+        """
+        with open(tracking_json_path, 'r') as f:
+            data = json.load(f)
+
+        self.video_path = data["video"]
+        self.tracking = [
+            t for t in data["tracking"]
+            if t["confidence"] >= min_confidence
+        ]
+
+        self.seq_len = seq_len
+        self.max_span = max_span
+        self.crop_size = crop_size
+        self.transform = transform or transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.ToTensor()
+        ])
+        self.unet = unet_model.to(device).eval()
+        self.device = device
+
+        self.valid_sequences = self._build_valid_sequences()
+        self.video = VideoFileClip(self.video_path)
+
+    def _build_valid_sequences(self):
+        sequences = []
+        for i in range(len(self.tracking) - self.seq_len + 1):
+            group = self.tracking[i:i + self.seq_len]
+            frame_ids = [pt["frame_id"] for pt in group]
+
+            if max(frame_ids) - min(frame_ids) > self.max_span:
+                continue
+
+            coords = np.array([pt["coordinates"] for pt in group])
+            frames = np.array(frame_ids)
+
+            sort_idx = np.argsort(frames)
+            frames_sorted = frames[sort_idx]
+            coords_sorted = coords[sort_idx]
+
+            if len(coords_sorted) >= 5:
+                window = min(7, len(coords_sorted) // 2 * 2 + 1)
+                try:
+                    x_smooth = savgol_filter(coords_sorted[:, 0], window_length=window, polyorder=2)
+                    y_smooth = savgol_filter(coords_sorted[:, 1], window_length=window, polyorder=2)
+                except ValueError:
+                    continue
+
+                smoothed = list(zip(x_smooth, y_smooth))
+                sequences.append({
+                    "frames": frames_sorted.tolist(),
+                    "coordinates": smoothed
+                })
+
+        return sequences
+
+    def __len__(self):
+        return len(self.valid_sequences)
+
+    def _load_frame(self, t):
+        frame = self.video.get_frame(t / self.video.fps)  # RGB
+        return Image.fromarray((frame * 255).astype(np.uint8))
+
+    def _crop_roi(self, img, center, size):
+        x, y = int(center[0]), int(center[1])
+        left = max(0, x - size // 2)
+        top = max(0, y - size // 2)
+        img = TF.crop(img, top, left, size, size)
+        return img
+
+    def __getitem__(self, idx):
+        seq = self.valid_sequences[idx]
+        frames = seq["frames"]
+        coords = seq["coordinates"]
+
+        crops = []
+        for t, center in zip(frames, coords):
+            img = self._load_frame(t)
+            crop = self._crop_roi(img, center, self.crop_size)
+            crop = self.transform(crop).unsqueeze(0).to(self.device)  # [1, C, 224, 224]
+
+            with torch.no_grad():
+                heatmap = torch.sigmoid(self.unet(crop))  # [1, 1, 224, 224]
+
+            crops.append(heatmap.squeeze(0).cpu())  # [1, 224, 224]
+
+        heatmap_seq = torch.stack(crops)  # [T, 1, 224, 224]
+        target = torch.tensor(coords[-1], dtype=torch.float32)  # Predict final centroid
+
+        return heatmap_seq, target

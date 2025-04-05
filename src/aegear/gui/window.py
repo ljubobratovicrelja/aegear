@@ -11,7 +11,7 @@ import tkinter as tk
 import tkinter.messagebox as messagebox
 import tkinter.filedialog as filedialog
 from tkinter import ttk
-from moviepy.editor import VideoFileClip
+from moviepy.video.io.VideoFileClip import VideoFileClip
 
 # Internal modules
 from aegear.calibration import SceneCalibration
