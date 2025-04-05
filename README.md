@@ -8,27 +8,31 @@
 
 ## 🧠 Project Overview
 
-**Aegear** is a computer vision toolkit for fish behavior analysis in aquaculture research settings. Originally developed to support behavioral experiments on juvenile Russian sturgeon (*Acipenser gueldenstaedtii*), Aegear enables drift-free, metric-accurate tracking of fish in complex tank environments using a deep learning-based pipeline.
+**Aegear** is a computer vision toolkit developed for the analysis of fish locomotion in controlled aquaculture environments. Originally designed for behavioral studies on juvenile Russian sturgeon (*Acipenser gueldenstaedtii*), the system enables robust detection and tracking of individual fish across a range of experimental conditions, including tanks with textured floors and heterogeneous lighting.
 
-It includes tools for camera calibration, model training, and data augmentation, with the goal of facilitating reproducible experiments and promoting adaptive reuse for other species in aquaculture.
+The toolkit addresses the need for accurate, reproducible behavioral metrics in video-based aquaculture experiments. It provides a complete pipeline for fish localization, trajectory tracking, scene calibration, and data augmentation — with a focus on modularity, reusability, and extensibility to other species and experimental setups.
 
-The name is a play on **Ægir**, the Norse god of the sea, evoking depth, observation, and aquatic control — as well as **eye-gear**, a nod to vision-based analysis systems.
+The name **Aegear** references **Ægir**, the Norse god of the sea, symbolizing the system's focus on aquatic environments, while also invoking *eye-gear* — a metaphor for visual instrumentation and observation.
+
+---
+
+## 🔬 Project Summary
+
+At the core of Aegear is a deep learning model for spatial fish localization, built on a U-Net-style architecture with an EfficientNet B0 encoder backbone. The encoder is initialized from `torchvision.models.efficientnet_b0(weights='IMAGENET1K_V1')`, with the first three stages frozen during training to preserve generic visual features. Decoder layers perform progressive upsampling using transposed convolutions, with skip connections linking each encoder stage to its corresponding decoder layer.
+
+The model produces a single-channel heatmap that reflects the likelihood and position of the fish within the input frame. Supervision is carried out using a weighted binary cross-entropy loss that emphasizes central activations, combined with a custom centroid distance loss to directly penalize spatial errors in predicted heatmap peaks. This training objective ensures precise localization under class imbalance and subtle visual cues.
+
+Tracking is initialized using a sliding-window search constrained by motion segmentation via OpenCV’s KNN background subtraction algorithm (Zivkovic & van der Heijden, 2006). Once the target is detected, subsequent frames are processed with local search around the last known position. This localized tracking strategy offers robust performance in dynamic or noisy visual conditions and supports real-time execution on modern CUDA-enabled GPUs.
+
+To allow for real-world quantification, Aegear includes a calibration module for metric scaling. Intrinsic parameters are obtained using Zhang’s method based on checkerboard imagery, while extrinsic calibration is performed by selecting four known reference points within the tank environment. This enables accurate reconstruction of fish trajectories in metric units (e.g., centimeters), suitable for downstream analysis of activity levels and behavioral patterns.
+
+In addition to the main pipeline, Aegear includes tools for:
+- camera calibration and manual ROI annotation from videos,
+- COCO-style dataset generation and polygon-to-heatmap conversion using distance transforms,
+- synthetic dataset augmentation by compositing fish onto complex backgrounds.
 
 ---
 
-## 📦 Features
-
-- 🔍 **U-Net + EfficientNet B0** detection model, transfer-learned and specialized for Russian sturgeon.
-- 🔥 **Heatmap-based centroid tracking** using peak activation as a proxy for fish position and confidence.
-- 🎯 **Sliding-window tracking initialization** using motion segmentation (OpenCV's KNN background subtractor).
-- ⚡ **Real-time tracking** on CUDA GPUs (e.g., RTX 3090 Ti).
-- 🧭 **Scene calibration** for metric distance measurement via intrinsic (Zhang) and extrinsic user-defined 4-point systems.
-- 🧪 **Notebooks** for training, validation visualization, and dataset augmentation.
-- 🛠️ **Helper scripts** for camera calibration and training ROI generation from video frames.
-- 📁 **COCO-format dataset preparation**, with augmentation across background complexity and heatmap generation.
-- ✅ MIT licensed.
-
----
 
 ## 📚 Publications & Citations
 
