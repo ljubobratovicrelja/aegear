@@ -20,3 +20,4 @@ best_model.pth
 paper/
 data/models/mask_rcnn/
 data/models/efficientunet/
+src/aegear.egg-info/
