@@ -18,6 +18,5 @@ src/__pycache__/
 data/calibration_images/
 best_model.pth
 paper/
-data/models/mask_rcnn/
-data/models/efficientunet/
 src/aegear.egg-info/
+data/models/

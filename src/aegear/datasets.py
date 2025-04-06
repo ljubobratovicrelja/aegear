@@ -2,21 +2,26 @@ import os
 import glob
 import json
 import random
+import pickle
 from pathlib import Path
 from typing import Tuple
 
 import cv2
 import numpy as np
 from scipy.signal import savgol_filter
+from scipy.interpolate import Rbf
 
 from PIL import Image
-from moviepy.video.io.VideoFileClip import VideoFileClip
 
 import torch
 from torch.utils.data import Dataset
 
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
+
+from tqdm import tqdm
+
+from aegear.model import EfficientUNet
 
 
 class FishHeatmapDataset(Dataset):
@@ -173,13 +178,15 @@ class FishHeatmapSequenceDataset(Dataset):
     def __init__(
         self,
         tracking_json_path,
-        unet_model,
-        seq_len=5,
+        unet_model: EfficientUNet,
+        device=None,
+        history_len=5,
         max_span=50,
+        interpolation_window=7,
+        interpolation_smoothness=0.5,
         min_confidence=0.5,
         crop_size=129,
-        transform=None,
-        device="cuda"
+        cache_path=None,
     ):
         """
         Args:
@@ -189,8 +196,7 @@ class FishHeatmapSequenceDataset(Dataset):
             max_span (int): Max frame span allowed within a sequence.
             min_confidence (float): Minimum confidence to use a tracking point.
             crop_size (int): Size of the square ROI to extract around centroid.
-            transform: Torchvision transform to apply to crops before U-Net.
-            device (str): Device to place input tensors and model.
+            cache_path (str): Path to cache ROIs and heatmaps.
         """
         with open(tracking_json_path, 'r') as f:
             data = json.load(f)
@@ -201,57 +207,153 @@ class FishHeatmapSequenceDataset(Dataset):
             if t["confidence"] >= min_confidence
         ]
 
-        self.seq_len = seq_len
+        self.interpolation_window = interpolation_window
+        self.interpolation_smoothness = interpolation_smoothness
+        self.history_len = history_len
         self.max_span = max_span
         self.crop_size = crop_size
-        self.transform = transform or transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.ToTensor()
+
+        unet_transforms = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                std=[0.229, 0.224, 0.225]),
         ])
-        self.unet = unet_model.to(device).eval()
-        self.device = device
+
+        unet_model.eval()
+        device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        unet_model.to(device)
 
         self.valid_sequences = self._build_valid_sequences()
-        self.video = VideoFileClip(self.video_path)
+        self.roi_cache, self.heatmap_cache = self._cache_rois_and_heatmaps(unet_model, unet_transforms, device, cache_path=cache_path)
+    
+    def _interpolate_tracking(self):
+        frame_ids = np.array([pt["frame_id"] for pt in self.tracking])
+        coords = np.array([pt["coordinates"] for pt in self.tracking])
+
+        min_frame = int(frame_ids.min())
+        max_frame = int(frame_ids.max())
+        dense_frames = np.arange(min_frame, max_frame + 1)
+
+        rbf_x = Rbf(frame_ids, coords[:, 0], function='multiquadric', epsilon=self.interpolation_smoothness)
+        rbf_y = Rbf(frame_ids, coords[:, 1], function='multiquadric', epsilon=self.interpolation_smoothness)
+
+        x_interp = rbf_x(dense_frames)
+        y_interp = rbf_y(dense_frames)
+
+        # Cache the dense interpolation: maps frame_id -> (x, y)
+        self._cached_trajectory_range = (min_frame, max_frame)
+        self._cached_trajectory = np.stack([x_interp, y_interp], axis=1)
+    
+    def _get_interpolated_trajectory(self, frame_range):
+        if not hasattr(self, "_cached_trajectory"):
+            self._interpolate_tracking()
+
+        min_frame, _ = self._cached_trajectory_range
+        indices = np.array(frame_range) - min_frame
+
+        return self._cached_trajectory[indices]
 
     def _build_valid_sequences(self):
         sequences = []
-        for i in range(len(self.tracking) - self.seq_len + 1):
-            group = self.tracking[i:i + self.seq_len]
-            frame_ids = [pt["frame_id"] for pt in group]
 
+        iw2 = self.interpolation_window // 2  # half window size
+
+        for i in range(iw2, len(self.tracking) - iw2):
+            group = self.tracking[i - iw2:i + iw2 + 1]
+
+            # Compute frame spread
+            frame_ids = [pt["frame_id"] for pt in group]
             if max(frame_ids) - min(frame_ids) > self.max_span:
                 continue
 
-            coords = np.array([pt["coordinates"] for pt in group])
-            frames = np.array(frame_ids)
+            ref_frame = self.tracking[i]["frame_id"]
+            frame_range = range(ref_frame - self.history_len, ref_frame + 2)
 
-            sort_idx = np.argsort(frames)
-            frames_sorted = frames[sort_idx]
-            coords_sorted = coords[sort_idx]
+            frames = list(frame_range)
+            coords = self._get_interpolated_trajectory(frame_range)
 
-            if len(coords_sorted) >= 5:
-                window = min(7, len(coords_sorted) // 2 * 2 + 1)
-                try:
-                    x_smooth = savgol_filter(coords_sorted[:, 0], window_length=window, polyorder=2)
-                    y_smooth = savgol_filter(coords_sorted[:, 1], window_length=window, polyorder=2)
-                except ValueError:
-                    continue
+            assert len(coords) == self.history_len + 2, f"Expected {self.history_len + 2} coordinates, got {len(coords)}"
 
-                smoothed = list(zip(x_smooth, y_smooth))
-                sequences.append({
-                    "frames": frames_sorted.tolist(),
-                    "coordinates": smoothed
-                })
-
+            sequences.append({
+                "frames": frames,
+                "coordinates": coords
+            })
+        
         return sequences
+
+    def _cache_rois_and_heatmaps(self, model, transforms, device, cache_path=None):
+        cap = cv2.VideoCapture(self.video_path)
+
+        roi_cache = None
+        heatmap_cache = None
+
+        roi_path = os.path.join(cache_path, f"roi_cache.pkl")
+        heatmap_path = os.path.join(cache_path, f"heatmap_cache.pkl")
+
+        if cache_path and os.path.exists(roi_path) and os.path.exists(heatmap_path):
+            with open(roi_path, 'rb') as f:
+                roi_cache = pickle.load(f)
+            
+            with open(heatmap_path, 'rb') as f:
+                heatmap_cache = pickle.load(f)
+            
+            if roi_cache and heatmap_cache:
+                print(f"Loaded cached ROIs and heatmaps from {cache_path}")
+                return roi_cache, heatmap_cache
+
+        # Collect all unique (frame_id, center) pairs
+        needed = []
+        for seq in self.valid_sequences:
+            needed.extend(zip(seq["frames"], seq["coordinates"]))
+
+        roi_cache = {}
+        heatmap_cache = {}
+
+        print(f"Cache not found. Processing {len(needed)} frames.")
+        
+        for fid, center in tqdm(needed, "Processing frames..."):
+            if fid in roi_cache:
+                continue
+
+            cap.set(cv2.CAP_PROP_POS_FRAMES, fid)
+            ret, frame = cap.read()
+
+            if not ret:
+                continue
+
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(rgb)
+            roi = self._crop_roi(img, center, self.crop_size)
+
+            roi_cache[fid] = roi
+
+            h_roi = transforms(roi).unsqueeze(0).to(device)
+            with torch.no_grad():
+                heatmap_cache[fid] = torch.sigmoid(model(h_roi)).squeeze(0).cpu()
+
+        cap.release()
+
+        # Update cache
+        if cache_path:
+            os.makedirs(cache_path, exist_ok=True)
+
+            with open(roi_path, 'wb') as f:
+                pickle.dump(roi_cache, f)
+
+            with open(heatmap_path, 'wb') as f:
+                pickle.dump(heatmap_cache, f)
+
+            print(f"Cached ROIs and heatmaps to {cache_path}")
+
+        return roi_cache, heatmap_cache
 
     def __len__(self):
         return len(self.valid_sequences)
 
-    def _load_frame(self, t):
-        frame = self.video.get_frame(t / self.video.fps)  # RGB
-        return Image.fromarray((frame * 255).astype(np.uint8))
+    def _load_frame(self, frame_num):
+        return self.roi_cache[frame_num]
 
     def _crop_roi(self, img, center, size):
         x, y = int(center[0]), int(center[1])
@@ -262,21 +364,31 @@ class FishHeatmapSequenceDataset(Dataset):
 
     def __getitem__(self, idx):
         seq = self.valid_sequences[idx]
-        frames = seq["frames"]
-        coords = seq["coordinates"]
+        frames = seq["frames"]                  # [f₋3, f₋2, f₋1, f₀, f₊1]
+        coordinates = seq["coordinates"]      # used for centering crops
 
         crops = []
-        for t, center in zip(frames, coords):
-            img = self._load_frame(t)
-            crop = self._crop_roi(img, center, self.crop_size)
-            crop = self.transform(crop).unsqueeze(0).to(self.device)  # [1, C, 224, 224]
+        for t in frames[:-1]:  # exclude last frame (f₊1)
+            crops.append(self.heatmap_cache[t])  # each: [1, 224, 224]
 
-            with torch.no_grad():
-                heatmap = torch.sigmoid(self.unet(crop))  # [1, 1, 224, 224]
+        heatmap_seq = torch.stack(crops)  # [T, 1, H, W], where T = seq_len - 1
 
-            crops.append(heatmap.squeeze(0).cpu())  # [1, 224, 224]
+        # Reference: smoothed position of f₀ (last input frame, used for cropping)
+        ref_x, ref_y = coordinates[-2]
 
-        heatmap_seq = torch.stack(crops)  # [T, 1, 224, 224]
-        target = torch.tensor(coords[-1], dtype=torch.float32)  # Predict final centroid
+        # Compute relative (dx, dy) offsets for each input frame w.r.t. f₀
+        relative_offsets = torch.tensor([
+            [x - ref_x, y - ref_y]
+            for (x, y) in coordinates[:-1]  # exclude f₊1
+        ], dtype=torch.float32)  # [T, 2]
 
-        return heatmap_seq, target
+        # Get true target: raw position in f₊1
+        target_x_global, target_y_global = coordinates[-1]  # last point is f₊1
+
+        # Convert to crop-local coordinate in f₀-centered frame
+        target_x = target_x_global - ref_x
+        target_y = target_y_global - ref_y
+
+        target = torch.tensor([target_x, target_y], dtype=torch.float32)  # [2]
+        
+        return heatmap_seq, relative_offsets, target
