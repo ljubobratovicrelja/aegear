@@ -70,16 +70,21 @@ class TrajectoryPredictionNet(nn.Module):
     offsets of past frames.
 
     Args:
-        heatmap_size (tuple): Spatial dimensions of the input heatmaps (H, W).
-        hidden_dim (int): Size of the GRU hidden state.
-        gru_layers (int): Number of stacked GRU layers.
-        pred_steps (int): Number of future steps to predict.
+        heatmap_size (tuple): Original heatmap size (H, W)
+        pooled_size (tuple): Target downsample size for each heatmap (H', W')
+        hidden_dim (int): GRU hidden state size
+        gru_layers (int): Number of GRU layers
+        pred_steps (int): Number of future positions to predict
     """
-    def __init__(self, heatmap_size=(224, 224), hidden_dim=128, gru_layers=1, pred_steps=1):
+    def __init__(self, heatmap_size=(224, 224), pooled_size=(32, 32),
+                 hidden_dim=64, gru_layers=1, pred_steps=1):
         super().__init__()
         self.H, self.W = heatmap_size
-        self.input_dim = self.H * self.W + 2  # heatmap flattened + (dx, dy)
+        self.pooled_H, self.pooled_W = pooled_size
+        self.input_dim = self.pooled_H * self.pooled_W + 2  # flattened pooled heatmap + offset
         self.pred_steps = pred_steps
+
+        self.pool = nn.AdaptiveAvgPool2d(pooled_size)
 
         self.gru = nn.GRU(
             input_size=self.input_dim,
@@ -89,36 +94,33 @@ class TrajectoryPredictionNet(nn.Module):
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(hidden_dim, 64),
+            nn.Linear(hidden_dim, 32),
             nn.ReLU(inplace=True),
-            # Output dimension is now pred_steps * 2
-            nn.Linear(64, pred_steps * 2)
+            nn.Linear(32, pred_steps * 2)
         )
 
-    def forward(self, heatmap_seq, relative_offsets):
+    def forward(self, heatmap_seq, offset_seq):
         """
         Args:
             heatmap_seq: Tensor of shape (B, T, 1, H, W)
-            relative_offsets: Tensor of shape (B, T, 2)
+            offset_seq: Tensor of shape (B, T, 2)
 
         Returns:
-            coords: Tensor of shape (B, pred_steps, 2) — predicted (x, y) pairs in crop-local coordinates
+            coords: Tensor of shape (B, pred_steps, 2)
         """
         B, T, C, H, W = heatmap_seq.shape
-        assert C == 1, "Expected single-channel (grayscale) heatmaps"
-        assert (H, W) == (self.H, self.W), "Heatmap size mismatch"
+        assert C == 1
 
-        # Flatten heatmaps: (B, T, H*W)
-        heatmap_flat = heatmap_seq.view(B, T, -1)
+        # Pool each heatmap down to (pooled_H, pooled_W)
+        x = heatmap_seq.view(B * T, 1, H, W)
+        pooled = self.pool(x).view(B, T, -1)  # [B, T, pooled_H * pooled_W]
 
-        # Concatenate flattened heatmaps with relative offsets: (B, T, H*W + 2)
-        x = torch.cat([heatmap_flat, relative_offsets], dim=-1)
+        # Concatenate pooled heatmaps with offset sequence
+        x = torch.cat([pooled, offset_seq], dim=-1)  # [B, T, input_dim]
 
-        # Pass through GRU; take the last hidden state
-        _, h_n = self.gru(x)
-        h_last = h_n[-1]  # (B, hidden_dim)
+        # GRU forward
+        _, h_n = self.gru(x)       # [num_layers, B, hidden_dim]
+        h_last = h_n[-1]           # [B, hidden_dim]
 
-        # Project to coordinates for pred_steps predictions
-        out = self.fc(h_last)  # (B, pred_steps*2)
-        out = out.view(B, self.pred_steps, 2)
-        return out
+        out = self.fc(h_last)      # [B, pred_steps * 2]
+        return out.view(B, self.pred_steps, 2)

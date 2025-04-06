@@ -343,8 +343,10 @@ class FishHeatmapSequenceDataset(Dataset):
 
         heatmap_seq = torch.stack(heatmaps)  # [T, 1, H, W], where T = seq_len - 1
 
+        present_point = len(history)
+
         # Reference for the relative offset computation
-        ref_x, ref_y = coordinates[-(len(future) + 1)]
+        ref_x, ref_y = coordinates[present_point]
 
         # Compute relative (dx, dy) offsets for each input frame w.r.t. f₀
         relative_offsets = [
@@ -352,9 +354,7 @@ class FishHeatmapSequenceDataset(Dataset):
             for (x, y) in coordinates
         ]
 
-        present_point = len(history) + 1
-
-        past_t = torch.tensor(relative_offsets[0:present_point], dtype=torch.float32)  # [2]
-        future_t = torch.tensor(relative_offsets[present_point:], dtype=torch.float32)  # [2]
+        past_t = torch.tensor(relative_offsets[0:present_point + 1], dtype=torch.float32)  # [2]
+        future_t = torch.tensor(relative_offsets[present_point + 1:], dtype=torch.float32)  # [2]
         
         return heatmap_seq, past_t, future_t
