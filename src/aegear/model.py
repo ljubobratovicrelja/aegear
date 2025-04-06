@@ -65,23 +65,21 @@ class EfficientUNet(nn.Module):
 
 class TrajectoryPredictionNet(nn.Module):
     """
-    A temporal GRU-based model for predicting the next fish centroid
+    A temporal GRU-based model for predicting the next n future fish centroids
     based on a sequence of U-Net-generated heatmaps and relative spatial 
     offsets of past frames.
-
-    Each frame is represented by a heatmap (centered crop) and its position 
-    relative to the final frame in the sequence. These inputs are fused and 
-    passed through a GRU to learn motion-aware localization.
 
     Args:
         heatmap_size (tuple): Spatial dimensions of the input heatmaps (H, W).
         hidden_dim (int): Size of the GRU hidden state.
         gru_layers (int): Number of stacked GRU layers.
+        pred_steps (int): Number of future steps to predict.
     """
-    def __init__(self, heatmap_size=(224, 224), hidden_dim=128, gru_layers=1):
+    def __init__(self, heatmap_size=(224, 224), hidden_dim=128, gru_layers=1, pred_steps=1):
         super().__init__()
         self.H, self.W = heatmap_size
         self.input_dim = self.H * self.W + 2  # heatmap flattened + (dx, dy)
+        self.pred_steps = pred_steps
 
         self.gru = nn.GRU(
             input_size=self.input_dim,
@@ -93,7 +91,8 @@ class TrajectoryPredictionNet(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(hidden_dim, 64),
             nn.ReLU(inplace=True),
-            nn.Linear(64, 2)  # Output: (x, y) relative to crop
+            # Output dimension is now pred_steps * 2
+            nn.Linear(64, pred_steps * 2)
         )
 
     def forward(self, heatmap_seq, relative_offsets):
@@ -103,7 +102,7 @@ class TrajectoryPredictionNet(nn.Module):
             relative_offsets: Tensor of shape (B, T, 2)
 
         Returns:
-            coords: Tensor of shape (B, 2) — predicted (x, y) in crop-local coordinates
+            coords: Tensor of shape (B, pred_steps, 2) — predicted (x, y) pairs in crop-local coordinates
         """
         B, T, C, H, W = heatmap_seq.shape
         assert C == 1, "Expected single-channel (grayscale) heatmaps"
@@ -112,13 +111,14 @@ class TrajectoryPredictionNet(nn.Module):
         # Flatten heatmaps: (B, T, H*W)
         heatmap_flat = heatmap_seq.view(B, T, -1)
 
-        # Concatenate heatmaps with relative offsets: (B, T, H*W + 2)
+        # Concatenate flattened heatmaps with relative offsets: (B, T, H*W + 2)
         x = torch.cat([heatmap_flat, relative_offsets], dim=-1)
 
-        # Pass through GRU
+        # Pass through GRU; take the last hidden state
         _, h_n = self.gru(x)
         h_last = h_n[-1]  # (B, hidden_dim)
 
-        # Project to coordinates
-        coords = self.fc(h_last)  # (B, 2)
-        return coords
+        # Project to coordinates for pred_steps predictions
+        out = self.fc(h_last)  # (B, pred_steps*2)
+        out = out.view(B, self.pred_steps, 2)
+        return out
