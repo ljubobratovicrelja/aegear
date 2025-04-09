@@ -5,7 +5,7 @@ Aegear is a modular, research-focused software package developed to support beha
 within tank-based experimental setups, where movement, interaction, and environment must be studied in
 a quantifiable and reproducible manner. The system was initially developed to support video-based 
 tracking of *Acipenser gueldenstaedtii* (Russian sturgeon) juveniles during the larviculture experiments
-conducted by Fazekas et al. (2025), with the goal of evaluating locomotory activity under varying 
+conducted by Fazekas (PhD thesis, 2020-), with the goal of evaluating locomotory activity under varying 
 feeding strategies and enrichment conditions.
 
 The name *Aegear* is a deliberate wordplay combining *Ægir* — the Norse god of the sea, symbolizing
@@ -49,11 +49,8 @@ Core components of Aegear include:
 
 **References**:
 
-Fazekas, G., Müller, T., Berzi-Nagy, L., Ljubobratović, R., Stanivuk, J., Fazekas, D. L., Káldy, J., Vass, N., 
-& Ljubobratović, U. (2025). *The feeding strategy and environmental enrichment modulate the locomotory 
-activity in Russian sturgeon (Acipenser gueldenstaedtii) juveniles - pursuing an optimal factorial 
-combination of larviculture strategies*. Research Center for Fisheries and Aquaculture (HAKI), 
-Hungarian University of Agriculture and Life Sciences (MATE), Szarvas, Hungary.
+Fazekas, G.: Investigating the effects of environmental factors and feeding strategies on early life development and behavior of Russian sturgeon (Acipenser gueldenstaedtii) and sterlet (A. ruthenus) [Doctoral thesis].
+Hungarian University of Agriculture and Life Sciences (MATE), Hungary.  
 
 Zivkovic, Z., & van der Heijden, F. (2006). *Efficient adaptive density estimation per image pixel for the task 
 of background subtraction*. Pattern Recognition Letters, 27(7), 773-780.
