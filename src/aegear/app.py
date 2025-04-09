@@ -6,7 +6,13 @@ This module sets up the GUI, handles video loading/calibration, and performs fis
 
 from aegear.gui.window import AegearMainWindow
 
-
-if __name__ == '__main__':
+def main():
+    """
+    Main function to run the Aegear application.
+    Initializes the main window and starts the GUI event loop.
+    """
     window = AegearMainWindow()
     window.mainloop()
+
+if __name__ == '__main__':
+    main()
