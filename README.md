@@ -49,15 +49,12 @@ In addition to the main pipeline, Aegear includes tools for:
 
 ## 📚 Publications & Citations
 
-Aegear was originally developed as a tool to assist larviculture experiments led by Fazekas et al. (2025), which investigated how environmental and feeding strategies affect locomotory activity in juvenile Russian sturgeon. The first iteration of the software focused on producing consistent fish localization and movement metrics in video-based trials.
+Aegear was originally developed as a tool to assist the PhD project of Georgina Fazekas (2020- ), which investigated how environmental and feeding strategies affect the swimming activity and behavior in juvenile sturgeons. The first iteration of the software focused on producing consistent fish localization and movement metrics in video-based trials.
 
 While existing tools such as [idtracker.ai](https://idtracker.ai/latest/) (Romero-Ferrero et al., 2018) have made significant advances in animal tracking in controlled laboratory setups, they often require clean backgrounds and consistent lighting to operate effectively. Aegear was initiated specifically to address the limitations of such systems in real aquaculture conditions, where floor texture, lighting, and water reflections introduce noise and complexity not handled well by traditional segmentation-based pipelines.
 
-> Fazekas, G., Müller, T., Berzi-Nagy, L., Ljubobratović, R., Stanivuk, J., Fazekas, D. L., Káldy, J., Vass, N.,  
-> & Ljubobratović, U. (2025). *The feeding strategy and environmental enrichment modulate the locomotory  
-> activity in Russian sturgeon (Acipenser gueldenstaedtii) juveniles – pursuing an optimal factorial  
-> combination of larviculture strategies*. Research Center for Fisheries and Aquaculture (HAKI),  
-> Hungarian University of Agriculture and Life Sciences (MATE), Szarvas, Hungary.
+> Fazekas, G.: Investigating the effects of environmental factors and feeding strategies on early life development and behavior of Russian sturgeon (Acipenser gueldenstaedtii) and sterlet (A. ruthenus) [Doctoral thesis].
+> Hungarian University of Agriculture and Life Sciences (MATE), Hungary.  
 >
 > Romero-Ferrero, F., Bergomi, M. G., Hinz, R., Heras, F. J. H., & de Polavieja, G. G. (2018).
 > idtracker.ai: tracking all individuals in small or large collectives of unmarked animals.
