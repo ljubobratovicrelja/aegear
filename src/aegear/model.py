@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision.models import efficientnet_b0
+import torch.nn.functional as F
 
 
 class EfficientUNet(nn.Module):
@@ -124,3 +125,31 @@ class TrajectoryPredictionNet(nn.Module):
 
         out = self.fc(h_last)      # [B, pred_steps * 2]
         return out.view(B, self.pred_steps, 2)
+
+class ConvClassifier(nn.Module):
+    """
+    A simple convolutional network for binary classification.
+    This model is designed to classify whether a fish is present in a given
+    region of interest (ROI) of the image.
+    """
+    # Size of the region of interest (ROI) for classification.
+    ROI_SIZE = 64
+
+    def __init__(self):
+        super(ConvClassifier, self).__init__()
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.fc1 = nn.Linear(128 * (ConvClassifier.ROI_SIZE // 8) ** 2, 256)
+        self.fc2 = nn.Linear(256, 1)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2)
+        x = F.relu(self.conv3(x))
+        x = F.max_pool2d(x, 2)
+        x = x.view(x.size(0), -1)  # Flatten layer
+        x = F.relu(self.fc1(x))
+        return torch.sigmoid(self.fc2(x))
