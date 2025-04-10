@@ -13,10 +13,10 @@ pyvenv.cfg
 venv/
 src/__pycache__/
 *.pyc
-*.spec
 *.MOV
 data/calibration_images/
 best_model.pth
 paper/
 src/aegear.egg-info/
 data/models/
+package_build/

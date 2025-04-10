@@ -18,11 +18,11 @@ from aegear.calibration import SceneCalibration
 from aegear.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from aegear.tracker import FishTracker
 from aegear.gui.tracking_bar import TrackingBar
+from aegear.utils import resource_path
 
-# Constants (consider moving these to a separate config file if they grow)
-DEFAULT_CALIBRATION_FILE = "data/calibration.xml"
-MODEL_PATH = "data/models/model_efficient_unet_2025-04-04.pth"
-
+# Constants
+DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
+MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-04-04.pth")
 
 class AegearMainWindow(tk.Tk):
     """
@@ -41,6 +41,10 @@ class AegearMainWindow(tk.Tk):
         # Set window title.
         self.title("Aegear")
 
+        # Set custom window icon
+        icon_path = resource_path("media/icon.ico")
+        self.iconbitmap(icon_path)
+
         # Initialize internal state.
         self._current_frame = None
         self._display_image = None
@@ -52,7 +56,7 @@ class AegearMainWindow(tk.Tk):
         self._first_frame_position = None
         self._fish_tracking = {}
         self._trajectory_smooth_size = 9
-        self._trajectory_frame_skip = 3
+        self._trajectory_frame_skip = 7
         self._screen_points = []  # Screen points used for calibration.
 
         # Boolean variable to control drawing the trajectory.
@@ -68,7 +72,7 @@ class AegearMainWindow(tk.Tk):
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Initialize the fish tracker.
-        self._tracker = FishTracker(MODEL_PATH, tracking_threshold=0.75, detection_threshold=0.8, debug=False)
+        self._tracker = FishTracker(MODEL_PATH, tracking_threshold=0.8, detection_threshold=0.85, debug=False)
 
         if initial_video == "":
             # No video selected; show error and exit.
