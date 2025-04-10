@@ -18,9 +18,9 @@ class EfficientUNet(nn.Module):
     The model is designed for training using the binary cross-entropy loss, hence the final output is expected to be
     run through a sigmoid activation function to produce a probability map.
     """
-    def __init__(self):
+    def __init__(self, weights='IMAGENET1K_V1'):
         super().__init__()
-        backbone = efficientnet_b0(weights='IMAGENET1K_V1')
+        backbone = efficientnet_b0(weights=weights)
         features = list(backbone.features.children())
 
         # Encoder blocks with proper shape control

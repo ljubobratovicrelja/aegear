@@ -69,7 +69,7 @@ class FishTracker:
 
     def _init_model(self, model_path):
         """Initialize the model."""
-        model = EfficientUNet()
+        model = EfficientUNet(weights=None)
         model.load_state_dict(torch.load(model_path, map_location=self._device))
         model.to(self._device)
 
