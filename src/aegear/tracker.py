@@ -293,7 +293,7 @@ class FishTracker:
                 cv2.waitKey(1)
             return None
         
-        return Prediction(confidence, centroid, output)
+        return Prediction(confidence, centroid, output[0])
     
 
     def _evaluate_trajectory_model(self, future_time, max_history=5):
@@ -302,6 +302,8 @@ class FishTracker:
 
         history = self.history[-max_history:]
         present_time, present_pos, _ = history[-1]
+
+        print(f"Present time: {present_time}, Future time: {future_time}")
 
         time_horizon = future_time - present_time
         if time_horizon <= 0:
@@ -321,7 +323,7 @@ class FishTracker:
             rel_offsets.append([dx, dy])
             heatmaps.append(heatmap)  # [1, H, W]
 
-        heatmap_seq = torch.stack(heatmaps).unsqueeze(1).to(self._device)  # [1, T, 1, H, W]
+        heatmap_seq = torch.stack(heatmaps).unsqueeze(0).to(self._device)  # [1, T, 1, H, W]
         rel_offsets = torch.tensor(rel_offsets, dtype=torch.float32).unsqueeze(0).to(self._device)
         dt_seq = torch.tensor(dt_seq, dtype=torch.float32).unsqueeze(0).to(self._device)
 
@@ -352,7 +354,7 @@ class FishTracker:
             present_px[1] + predicted_delta_px[1]
         )
 
-        return predicted_pos_px
+        return predicted_pos_px, direction  # direction is normalized
 
     def _refine_with_trajectory(self, frame_time, detection_centroid):
         """
@@ -459,7 +461,8 @@ class FishTracker:
             return True
 
         hist_unit = hist_vec / norm_hist
-        pred_unit = predicted_direction / norm_pred
+        pred_unit = np.array(predicted_direction).flatten()
+        pred_unit /= norm_pred
 
         cos_sim = np.clip(np.dot(hist_unit, pred_unit), -1.0, 1.0)
         angle_deg = np.degrees(np.arccos(cos_sim))

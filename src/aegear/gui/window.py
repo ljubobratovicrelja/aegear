@@ -22,7 +22,8 @@ from aegear.utils import resource_path
 
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
-MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-04-04.pth")
+HEATMAP_MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-04-04.pth")
+TRAJECTORY_PREDICITON_MODEL_PATH = resource_path("data/models/model_trajector_prediction_2025-04-15.pth")
 
 class AegearMainWindow(tk.Tk):
     """
@@ -72,7 +73,7 @@ class AegearMainWindow(tk.Tk):
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Initialize the fish tracker.
-        self._tracker = FishTracker(MODEL_PATH, tracking_threshold=0.8, detection_threshold=0.85, debug=False)
+        self._tracker = FishTracker(HEATMAP_MODEL_PATH, TRAJECTORY_PREDICITON_MODEL_PATH, tracking_threshold=0.8, detection_threshold=0.85, debug=False)
 
         if initial_video == "":
             # No video selected; show error and exit.
@@ -342,6 +343,9 @@ class AegearMainWindow(tk.Tk):
             progress_value += progress_increment
             progress['value'] = progress_value
 
+            # Exact time in seconds of the current frame for tracker history and trajectory prediciton mechanism.
+            frame_t = float(frame_id) / float(self.clip.fps)
+
             elapsed_time = time.time() - start_time
             estimated_time = elapsed_time / progress_value * 100.0 - elapsed_time
             estimated_time_str = "{:02d}:{:02d}:{:02d}".format(
@@ -366,7 +370,7 @@ class AegearMainWindow(tk.Tk):
             draw_image = frame_image.copy()
             frame_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
 
-            result = self._tracker.track(frame_image, mask=background_mask)
+            result = self._tracker.track(frame_image, frame_t, mask=background_mask)
             if result is not None:
                 (coordinates, confidence) = result
                 self._fish_tracking[frame_id] = (coordinates, confidence)
