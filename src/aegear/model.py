@@ -66,24 +66,23 @@ class EfficientUNet(nn.Module):
 
 class TrajectoryPredictionNet(nn.Module):
     """
-    A temporal GRU-based model for predicting the next n future fish centroids
-    based on a sequence of U-Net-generated heatmaps and relative spatial 
-    offsets of past frames.
+    GRU-based model for predicting short-term fish movement as a direction and intensity vector.
 
-    Args:
-        heatmap_size (tuple): Original heatmap size (H, W)
-        pooled_size (tuple): Target downsample size for each heatmap (H', W')
-        hidden_dim (int): GRU hidden state size
-        gru_layers (int): Number of GRU layers
-        pred_steps (int): Number of future positions to predict
+    Each input timestep consists of:
+        - a pooled heatmap of the fish region
+        - the relative position (x, y) of the fish compared to the current frame
+        - the time difference (dt) from the current frame (in seconds)
+
+    The model encodes the temporal sequence using a GRU and predicts:
+        - a 2D unit direction vector (dx, dy)
+        - a scalar intensity (speed in normalized coordinate units per second)
     """
-    def __init__(self, heatmap_size=(224, 224), pooled_size=(32, 32),
-                 hidden_dim=64, gru_layers=1, pred_steps=1):
+    def __init__(self, heatmap_size=(224, 224), pooled_size=(64, 64),
+                 hidden_dim=64, gru_layers=1):
         super().__init__()
         self.H, self.W = heatmap_size
         self.pooled_H, self.pooled_W = pooled_size
-        self.input_dim = self.pooled_H * self.pooled_W + 2  # flattened pooled heatmap + offset
-        self.pred_steps = pred_steps
+        self.input_dim = self.pooled_H * self.pooled_W + 2 + 1  # heatmap + rel pos + dt
 
         self.pool = nn.AdaptiveAvgPool2d(pooled_size)
 
@@ -97,34 +96,33 @@ class TrajectoryPredictionNet(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(hidden_dim, 32),
             nn.ReLU(inplace=True),
-            nn.Linear(32, pred_steps * 2)
+            nn.Linear(32, 3)  # dx, dy, intensity
         )
 
-    def forward(self, heatmap_seq, offset_seq):
+    def forward(self, heatmap_seq, rel_pos_seq, dt_seq):
         """
         Args:
-            heatmap_seq: Tensor of shape (B, T, 1, H, W)
-            offset_seq: Tensor of shape (B, T, 2)
+            heatmap_seq (Tensor): Shape (B, T, 1, H, W), U-Net heatmaps
+            rel_pos_seq (Tensor): Shape (B, T, 2), position deltas w.r.t. current frame
+            dt_seq (Tensor): Shape (B, T, 1), time deltas w.r.t. current frame (in seconds)
 
         Returns:
-            coords: Tensor of shape (B, pred_steps, 2)
+            Tensor: Shape (B, 3), [direction_x, direction_y, intensity]
         """
         B, T, C, H, W = heatmap_seq.shape
         assert C == 1
 
-        # Pool each heatmap down to (pooled_H, pooled_W)
         x = heatmap_seq.view(B * T, 1, H, W)
-        pooled = self.pool(x).view(B, T, -1)  # [B, T, pooled_H * pooled_W]
+        pooled = self.pool(x).view(B, T, -1)  # (B, T, pooled_H * pooled_W)
 
-        # Concatenate pooled heatmaps with offset sequence
-        x = torch.cat([pooled, offset_seq], dim=-1)  # [B, T, input_dim]
+        x = torch.cat([pooled, rel_pos_seq, dt_seq], dim=-1)  # (B, T, input_dim)
 
-        # GRU forward
-        _, h_n = self.gru(x)       # [num_layers, B, hidden_dim]
-        h_last = h_n[-1]           # [B, hidden_dim]
+        _, h_n = self.gru(x)  # (num_layers, B, hidden_dim)
+        h_last = h_n[-1]     # (B, hidden_dim)
 
-        out = self.fc(h_last)      # [B, pred_steps * 2]
-        return out.view(B, self.pred_steps, 2)
+        out = self.fc(h_last)  # (B, 3)
+        return out.view(B, 3)
+
 
 class ConvClassifier(nn.Module):
     """

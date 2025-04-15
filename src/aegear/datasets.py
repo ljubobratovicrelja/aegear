@@ -173,17 +173,19 @@ class RandomPoissonNoise(torch.nn.Module):
         noise = torch.poisson(x_scaled)
         return torch.clamp(noise / 255.0, 0.0, 1.0)
 
-
 class FishHeatmapSequenceDataset(Dataset):
+
+    _HEATMAP_CACHE = None  # Class-level shared cache for heatmaps
+
     def __init__(
         self,
         tracking_json_path,
         unet_model: EfficientUNet,
+        video_dir="",
         device=None,
-        history_len=30,
-        future_len=5,
-        stride=5,
-        max_span=50,
+        history_lookback_s=3.0,
+        n_history_samples=5,
+        future_horizon_s=1.0,
         interpolation_smoothness=0.5,
         min_confidence=0.5,
         crop_size=129,
@@ -193,10 +195,9 @@ class FishHeatmapSequenceDataset(Dataset):
         Args:
             tracking_json_path (str): Path to the JSON with tracking data.
             unet_model (nn.Module): Trained EfficientUNet model.
-            history_len (int): Number of historical steps (excluding the target) for interpolation.
-            future_len (int): Number of future steps to predict.
-            stride (int): Step size between frames in the sequence.
-            max_span (int): Max frame span allowed within a sequence.
+            history_lookback_s (float): Time in seconds to look back for history sampling.
+            n_history_samples (int): Number of historical samples to randomly draw from history window.
+            future_horizon_s (float): Time in seconds to look ahead for future prediction.
             min_confidence (float): Minimum confidence to use a tracking point.
             crop_size (int): Size of the square ROI to extract around centroid.
             cache_path (str): Path to cache ROIs and heatmaps.
@@ -204,17 +205,16 @@ class FishHeatmapSequenceDataset(Dataset):
         with open(tracking_json_path, 'r') as f:
             data = json.load(f)
 
-        self.video_path = data["video"]
+        self.video_path = os.path.join(video_dir, data["video"])
         self.tracking = [
             t for t in data["tracking"]
             if t["confidence"] >= min_confidence
         ]
 
         self.interpolation_smoothness = interpolation_smoothness
-        self.history_len = history_len
-        self.future_len = future_len
-        self.stride = stride
-        self.max_span = max_span
+        self.history_lookback_s = history_lookback_s
+        self.n_history_samples = n_history_samples
+        self.future_horizon_s = future_horizon_s
         self.crop_size = crop_size
 
         unet_transforms = transforms.Compose([
@@ -232,7 +232,38 @@ class FishHeatmapSequenceDataset(Dataset):
         self.sequence_cache = self._build_valid_sequence(
             unet_model, unet_transforms, device, cache_path=cache_path
         )
-    
+
+        # Estimate FPS from video file
+        cap = cv2.VideoCapture(self.video_path)
+        if not cap.isOpened():
+            raise Exception(f"Could not open video file: {self.video_path}")
+        self.fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+
+        # Compute timestamps and normalized coordinates for each frame in sequence cache
+        cap = cv2.VideoCapture(self.video_path)
+        self.frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
+        for entry in self.sequence_cache:
+            entry["timestamp"] = entry["frame_id"] / self.fps
+            x, y = entry["coordinates"]
+            entry["normalized_coordinates"] = [x / self.frame_width, y / self.frame_height]
+        
+        # Store data into dedicated members of easier fetching in __getitem__
+        self.timestamps = np.array([e["timestamp"] for e in self.sequence_cache])
+        self.norm_coords = np.array([e["normalized_coordinates"] for e in self.sequence_cache])
+
+        if FishHeatmapSequenceDataset._HEATMAP_CACHE is None:
+            print("Creating shared heatmap cache...")
+            heatmap_tensor = torch.stack([e["heatmap"].squeeze(0) for e in self.sequence_cache], dim=0)  # [N, H, W]
+            FishHeatmapSequenceDataset._HEATMAP_CACHE = heatmap_tensor.share_memory_()  # ensure shared memory
+            print("Shared heatmap cache created.")
+
+        self.heatmaps = FishHeatmapSequenceDataset._HEATMAP_CACHE
+
+
     def _interpolate_tracking(self):
         frame_ids = np.array([pt["frame_id"] for pt in self.tracking])
         coords = np.array([pt["coordinates"] for pt in self.tracking])
@@ -284,6 +315,10 @@ class FishHeatmapSequenceDataset(Dataset):
 
         cap = cv2.VideoCapture(self.video_path)
 
+        # Check if video opened successfully
+        if not cap.isOpened():
+            raise Exception(f"Error opening video file: {self.video_path}")
+
         data_bar = tqdm(zip(range(begin_frame, end_frame + 1), valid_coords), "Processing frames...")
         for fid, coord in data_bar:
             cap.set(cv2.CAP_PROP_POS_FRAMES, fid)
@@ -321,7 +356,11 @@ class FishHeatmapSequenceDataset(Dataset):
         return sequence_cache
 
     def __len__(self):
-        return len(self.sequence_cache) - self.history_len - self.future_len - 1
+        # Compute number of usable samples based on max time span needed
+        total_time_span = self.history_lookback_s + self.future_horizon_s
+        min_required_frames = int(total_time_span * self.fps) + 1  # +1 for the present frame
+      
+        return len(self.sequence_cache) - min_required_frames
 
     def _crop_roi(self, img, center, size):
         x, y = int(center[0]), int(center[1])
@@ -331,30 +370,42 @@ class FishHeatmapSequenceDataset(Dataset):
         return img
 
     def __getitem__(self, idx):
-        
-        present_frame = idx + self.history_len
+        present_idx = idx + int(self.history_lookback_s * self.fps)
+        present_ts = self.timestamps[present_idx]
+        present_coord = self.norm_coords[present_idx]
 
-        history = self.sequence_cache[idx:present_frame:self.stride]
-        present = [self.sequence_cache[present_frame]]
-        future = self.sequence_cache[present_frame + self.stride:present_frame + self.stride + self.future_len:self.stride]
+        # Fast timestamp slicing
+        history_start_ts = present_ts - self.history_lookback_s
+        start_idx = np.searchsorted(self.timestamps, history_start_ts, side='left')
+        history_indices = np.arange(start_idx, present_idx)
 
-        coordinates = [s["coordinates"] for s in (history + present + future)]
-        heatmaps = [h["heatmap"] for h in (history + present)]
+        if len(history_indices) >= self.n_history_samples:
+            sampled_idx = np.sort(np.random.choice(history_indices, self.n_history_samples, replace=False))
+        else:
+            sampled_idx = history_indices
 
-        heatmap_seq = torch.stack(heatmaps)  # [T, 1, H, W], where T = seq_len - 1
+        full_idx = np.append(sampled_idx, present_idx)
 
-        present_point = len(history)
+        coords = self.norm_coords[full_idx]  # (T, 2)
+        dts = self.timestamps[full_idx] - present_ts  # (T,)
+        heatmap_seq = self.heatmaps[full_idx].unsqueeze(1)  # [T, 1, H, W]
 
-        # Reference for the relative offset computation
-        ref_x, ref_y = coordinates[present_point]
+        rel_offsets = coords - present_coord  # (T, 2)
 
-        # Compute relative (dx, dy) offsets for each input frame w.r.t. f₀
-        relative_offsets = [
-            [x - ref_x, y - ref_y]
-            for (x, y) in coordinates
-        ]
+        past_offsets = torch.tensor(rel_offsets, dtype=torch.float32)  # [T, 2]
+        dt_seq = torch.tensor(dts[:, None], dtype=torch.float32)  # [T, 1]
 
-        past_t = torch.tensor(relative_offsets[0:present_point + 1], dtype=torch.float32)  # [2]
-        future_t = torch.tensor(relative_offsets[present_point + 1:], dtype=torch.float32)  # [2]
-        
-        return heatmap_seq, past_t, future_t
+        # Future prediction target
+        future_time = present_ts + self.future_horizon_s
+        future_idx = np.searchsorted(self.timestamps, future_time, side='left')
+        future_idx = min(future_idx, len(self.timestamps) - 1)
+
+        future_coord = self.norm_coords[future_idx]
+        future_dt = self.timestamps[future_idx] - present_ts
+
+        delta = (future_coord - present_coord) / (future_dt + 1e-6)
+        intensity = np.linalg.norm(delta)
+        direction = delta / (intensity + 1e-6)
+        target = torch.tensor(np.concatenate([direction, [intensity]]), dtype=torch.float32)  # [3]
+
+        return heatmap_seq, past_offsets, dt_seq, target
