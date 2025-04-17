@@ -18,11 +18,14 @@ The configuration descriptor is a JSON file with the following fields:
 import sys
 import os
 import json
+
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+
 from tqdm import tqdm
-from moviepy.editor import VideoFileClip
+
+from aegear.video import VideoClip
 
 
 def load_descriptor(path: str) -> dict:
@@ -48,19 +51,19 @@ def get_video_metadata(video_path: str):
         video_path (str): Path to the video file.
 
     Returns:
-        tuple: (VideoFileClip object, number of frames)
+        tuple: (VideoClip object, number of frames)
     """
-    video = VideoFileClip(video_path)
+    video = VideoClip(video_path)
     num_frames = int(video.fps * video.duration)
     return video, num_frames
 
 
-def detect_corners(video: VideoFileClip, num_frames: int, pattern_size, sub_pix_win_size, criteria, skip_frames: int):
+def detect_corners(video: VideoClip, num_frames: int, pattern_size, sub_pix_win_size, criteria, skip_frames: int):
     """
     Process video frames and detect chessboard corners.
 
     Args:
-        video (VideoFileClip): Video clip object.
+        video (VideoClip): Video clip object.
         num_frames (int): Total number of frames in the video.
         pattern_size (tuple): Number of inner corners per row and column.
         sub_pix_win_size (tuple): Window size for sub-pixel refinement.

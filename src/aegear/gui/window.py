@@ -11,7 +11,6 @@ import tkinter as tk
 import tkinter.messagebox as messagebox
 import tkinter.filedialog as filedialog
 from tkinter import ttk
-from moviepy.video.io.VideoFileClip import VideoFileClip
 
 # Internal modules
 from aegear.calibration import SceneCalibration
@@ -19,6 +18,7 @@ from aegear.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
 from aegear.tracker import FishTracker
 from aegear.gui.tracking_bar import TrackingBar
 from aegear.utils import resource_path
+from aegear.video import VideoClip
 
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
@@ -82,7 +82,7 @@ class AegearMainWindow(tk.Tk):
             sys.exit(1)
 
         # Load video clip.
-        self.clip = VideoFileClip(initial_video)
+        self.clip = VideoClip(initial_video)
         self._num_frames = self.clip.duration * self.clip.fps
 
         # Set up frames: center for video, bottom for slider/status, right for controls.
@@ -519,7 +519,7 @@ class AegearMainWindow(tk.Tk):
             return
 
         try:
-            self.clip = VideoFileClip(filename)
+            self.clip = VideoClip(filename)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load video: {e}")
             self.clip = None

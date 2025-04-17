@@ -31,7 +31,8 @@ import os
 import sys
 import json
 import cv2
-from moviepy.editor import VideoFileClip
+
+from aegear.video import VideoClip
 import aegear.motiondetection as md
 
 # Categories for sample classification and display window title.
@@ -227,7 +228,7 @@ def main():
         if videoFile not in training_package["fish"]:
             training_package["fish"][videoFile] = []
 
-        video = VideoFileClip(videoPath)
+        video = VideoClip(videoPath)
         fps = video.fps
         numImages = int(video.duration * fps)
 
