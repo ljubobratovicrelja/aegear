@@ -49,6 +49,10 @@ class EfficientUNet(nn.Module):
         )
 
     def forward(self, x):
+        return self.forward_with_decoded(x)[0]
+    
+    def forward_with_decoded(self, x):
+        """Forward pass with last decoder output return for interface with trajectory prediction."""
         x1 = self.enc1(x)  # [B, 16, 112, 112]
         x2 = self.enc2(x1) # [B, 24, 56, 56]
         x3 = self.enc3(x2) # [B, 40, 28, 28]
@@ -61,67 +65,82 @@ class EfficientUNet(nn.Module):
         d1 = self.up1(d2) + x1  # [B, 16, 112, 112]
         d0 = self.up0(d1)       # [B, 8, 224, 224]
 
-        return self.out(d0)   # [B, 1, 224, 224]
+        return self.out(d0), d0
 
 
-class TrajectoryPredictionNet(nn.Module):
-    """
-    GRU-based model for predicting short-term fish movement as a direction and intensity vector.
-
-    Each input timestep consists of:
-        - a pooled heatmap of the fish region
-        - the relative position (x, y) of the fish compared to the current frame
-        - the time difference (dt) from the current frame (in seconds)
-
-    The model encodes the temporal sequence using a GRU and predicts:
-        - a 2D unit direction vector (dx, dy)
-        - a scalar intensity (speed in normalized coordinate units per second)
-    """
-    def __init__(self, heatmap_size=(224, 224), pooled_size=(64, 64),
-                 hidden_dim=64, gru_layers=1):
+class ConvGRUCell(nn.Module):
+    def __init__(self, input_channels, hidden_channels, kernel_size=3):
         super().__init__()
-        self.H, self.W = heatmap_size
-        self.pooled_H, self.pooled_W = pooled_size
-        self.input_dim = self.pooled_H * self.pooled_W + 2 + 1  # heatmap + rel pos + dt
+        self.input_channels = input_channels
+        self.hidden_channels = hidden_channels
+        padding = kernel_size // 2
 
-        self.pool = nn.AdaptiveAvgPool2d(pooled_size)
+        in_ch = input_channels + hidden_channels
+        self.reset_gate = nn.Conv2d(in_ch, hidden_channels, kernel_size, padding=padding)
+        self.update_gate = nn.Conv2d(in_ch, hidden_channels, kernel_size, padding=padding)
+        self.out_gate   = nn.Conv2d(in_ch, hidden_channels, kernel_size, padding=padding)
 
-        self.gru = nn.GRU(
-            input_size=self.input_dim,
-            hidden_size=hidden_dim,
-            num_layers=gru_layers,
-            batch_first=True
-        )
+    def forward(self, x, h):
+        if h is None:
+            B, _, H, W = x.shape
+            h = torch.zeros((B, self.hidden_channels, H, W), dtype=x.dtype, device=x.device)
 
-        self.fc = nn.Sequential(
-            nn.Linear(hidden_dim, 32),
+        combined = torch.cat([x, h], dim=1)  # [B, input+hidden, H, W]
+        z = torch.sigmoid(self.update_gate(combined))
+        r = torch.sigmoid(self.reset_gate(combined))
+        combined_reset = torch.cat([x, r * h], dim=1)
+        h_tilde = torch.tanh(self.out_gate(combined_reset))
+        h_new = (1 - z) * h + z * h_tilde
+        return h_new
+
+
+class ConvGRU(nn.Module):
+    def __init__(self, input_channels, hidden_channels, num_steps):
+        super().__init__()
+        self.cell = ConvGRUCell(input_channels, hidden_channels)
+        self.num_steps = num_steps
+
+    def forward(self, input_seq):
+        # input_seq: [B, T, C, H, W]
+        B, T, C, H, W = input_seq.shape
+        h = None
+        for t in range(T):
+            h = self.cell(input_seq[:, t], h)
+        return h  # [B, hidden_channels, H, W]
+
+
+class TemporalRefinedUNet(nn.Module):
+    HISTORY_LEN = 3  # Used to define expected sequence length (not strictly needed here)
+
+    def __init__(self, unet: nn.Module):
+        super().__init__()
+        self.unet = unet
+        self.convgru = ConvGRU(input_channels=2, hidden_channels=8, num_steps=self.HISTORY_LEN)
+        self.fusion = nn.Sequential(
+            nn.Conv2d(8 + 8, 8, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Linear(32, 3)  # dx, dy, intensity
+            nn.Conv2d(8, 1, kernel_size=1)
         )
+    
+    def forward(self, rgb, timestamp, history=None):
+        raw_heatmap, decoder_feat = self.unet.forward_with_decoded(rgb)
 
-    def forward(self, heatmap_seq, rel_pos_seq, dt_seq):
-        """
-        Args:
-            heatmap_seq (Tensor): Shape (B, T, 1, H, W), U-Net heatmaps
-            rel_pos_seq (Tensor): Shape (B, T, 2), position deltas w.r.t. current frame
-            dt_seq (Tensor): Shape (B, T, 1), time deltas w.r.t. current frame (in seconds)
+        if history is None:
+            return raw_heatmap
 
-        Returns:
-            Tensor: Shape (B, 3), [direction_x, direction_y, intensity]
-        """
-        B, T, C, H, W = heatmap_seq.shape
-        assert C == 1
+        heatmaps, timestamps = history
+        B, T, _, H, W = heatmaps.shape
 
-        x = heatmap_seq.view(B * T, 1, H, W)
-        pooled = self.pool(x).view(B, T, -1)  # (B, T, pooled_H * pooled_W)
+        dt = (timestamp[:, None] - timestamps).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        dt_map = dt.expand(-1, -1, 1, H, W)
 
-        x = torch.cat([pooled, rel_pos_seq, dt_seq], dim=-1)  # (B, T, input_dim)
+        heat_seq = torch.cat([heatmaps, dt_map], dim=2)
 
-        _, h_n = self.gru(x)  # (num_layers, B, hidden_dim)
-        h_last = h_n[-1]     # (B, hidden_dim)
+        temporal_feat = self.convgru(heat_seq)
+        fused = self.fusion(torch.cat([temporal_feat, decoder_feat], dim=1))
 
-        out = self.fc(h_last)  # (B, 3)
-        return out.view(B, 3)
+        return fused
+
 
 
 class ConvClassifier(nn.Module):
