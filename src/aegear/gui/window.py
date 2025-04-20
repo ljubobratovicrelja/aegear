@@ -23,7 +23,7 @@ from aegear.video import VideoClip
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
 HEATMAP_MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-04-04.pth")
-TRAJECTORY_PREDICITON_MODEL_PATH = resource_path("data/models/model_trajector_prediction_2025-04-15.pth")
+SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-04-20.pth")
 
 class AegearMainWindow(tk.Tk):
     """
@@ -73,7 +73,7 @@ class AegearMainWindow(tk.Tk):
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Initialize the fish tracker.
-        self._tracker = FishTracker(HEATMAP_MODEL_PATH, TRAJECTORY_PREDICITON_MODEL_PATH, tracking_threshold=0.8, detection_threshold=0.85, debug=False)
+        self._tracker = FishTracker(HEATMAP_MODEL_PATH, SIAMESE_MODEL_PATH, tracking_threshold=0.8, detection_threshold=0.85, debug=False)
 
         if initial_video == "":
             # No video selected; show error and exit.
@@ -159,13 +159,13 @@ class AegearMainWindow(tk.Tk):
         self.tracking_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100,
                                                  orient=tk.HORIZONTAL, label="Tracking Threshold",
                                                  command=self._tracking_threshold_changed)
-        self.tracking_threshold_scale.set(int(self._tracker.tracking_threshold * 100.0))
+        self.tracking_threshold_scale.set(int(self._tracker.siamese_threshold * 100.0))
         self.tracking_threshold_scale.pack(side=tk.LEFT)
 
         self.detection_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100,
                                                   orient=tk.HORIZONTAL, label="Detection Threshold",
                                                   command=self._detection_threshold_changed)
-        self.detection_threshold_scale.set(int(self._tracker.detection_threshold * 100.0))
+        self.detection_threshold_scale.set(int(self._tracker.heatmap_threshold * 100.0))
         self.detection_threshold_scale.pack(side=tk.LEFT)
 
         self.smooth_trajectory_scale = tk.Scale(self.right_frame, from_=1, to=100,
@@ -186,7 +186,7 @@ class AegearMainWindow(tk.Tk):
 
         # Navigation buttons.
         self.prev_frame_button = tk.Button(self.right_frame, text=u"\u23EE",
-                                           command=self._prev_frame)
+                                           command=self.previous_frame)
         self.prev_frame_button.pack(side=tk.LEFT)
 
         self.pause_button = tk.Button(self.right_frame, text=u"\u23F8",
@@ -198,7 +198,7 @@ class AegearMainWindow(tk.Tk):
         self.play_button.pack(side=tk.RIGHT)
 
         self.next_frame_button = tk.Button(self.right_frame, text=u"\u23ED",
-                                           command=self._next_frame)
+                                           command=self.next_frame)
         self.next_frame_button.pack(side=tk.RIGHT)
 
         # Status bars.
@@ -211,11 +211,98 @@ class AegearMainWindow(tk.Tk):
         self.distance_status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
         # Final GUI update and menu creation.
+        self._setup_keypress_events()
+        self._setup_image_mouse_events()
         self.update_gui()
         self._create_menu()
 
         # Show window after setup.
         self.deiconify()
+    
+    def _setup_keypress_events(self):
+        """Set keypress events for navigation."""
+        self.bind("<Left>", lambda _: self._previous_tracked_frame())
+        self.bind("<Right>", lambda _: self._next_tracked_frame())
+        self.bind("<space>", lambda _: self._start_tracking())
+        self.bind("<Escape>", lambda _: self._pause_tracking())
+        self.bind("<Delete>", lambda _: self._delete_current_tracked_frame())
+    
+    def _setup_image_mouse_events(self):
+        """Set mouse events for image interactions."""
+        self.image_label.bind("<Button-1>", lambda event: self._add_tracking_point(event))
+        self.image_label.bind("<Button-3>", lambda event: self._remove_current_frame_track(event))
+        self.image_label.bind("<MouseWheel>", lambda event: self._seek_frames(event))
+    
+    def _delete_current_tracked_frame(self):
+        """Delete the currently tracked frame from the list."""
+        current_frame = self._get_current_frame_number()
+        if current_frame in self._fish_tracking:
+            del self._fish_tracking[current_frame]
+        self._rebuild_tracking_listbox()
+    
+    def _rebuild_tracking_listbox(self):
+        """Rebuild the tracking listbox from the current fish tracking data."""
+        self.tracking_listbox.delete(0, tk.END)
+        for frame_id, (coordinates, confidence) in sorted(self._fish_tracking.items()):
+            self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
+        self.update_gui()
+    
+    def _add_tracking_point(self, event):
+        print("Adding tracking point at ({}, {})".format(event.x, event.y))
+        current_frame = self._get_current_frame_number()
+        self._insert_tracking_point(current_frame, (event.x, event.y), 1.0)
+    
+    def _next_tracked_frame(self):
+        """Move to the next tracked frame."""
+        if len(self._fish_tracking) < 1:
+            return
+
+        current_frame = self._get_current_frame_number()
+        next_frame = current_frame + 1
+
+        while next_frame not in self._fish_tracking:
+            if next_frame >= self._num_frames:
+                return
+            next_frame += 1
+
+        self._play_frame(next_frame)
+
+    def _previous_tracked_frame(self):
+        """Move to the previous tracked frame."""
+        if len(self._fish_tracking) < 1:
+            return
+
+        current_frame = self._get_current_frame_number()
+        previous_frame = current_frame - 1
+
+        while previous_frame not in self._fish_tracking:
+            previous_frame -= 1
+
+            if previous_frame < 0:
+                return
+
+        self._play_frame(previous_frame)
+    
+    def _remove_current_frame_track(self, event):
+        current_frame = self._get_current_frame_number()
+        if current_frame in self._fish_tracking:
+            del self._fish_tracking[current_frame]
+            self.tracking_listbox.delete(tk.END)
+        self.update_gui()
+    
+    def _seek_frames(self, event):
+        """Move to the tracked frame based on mouse wheel scroll."""
+        if event.delta > 0:
+            self.next_frame()
+        else:
+            self.previous_frame()
+    
+    def _insert_tracking_point(self, frame_id, coordinates, confidence):
+        """Insert a tracking point into the listbox."""
+        self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
+        self._fish_tracking[frame_id] = (coordinates, confidence)
+        self.track_bar.mark_processed(frame_id)
+        self.update_gui()
 
     def _create_menu(self):
         """Set up the application menu bar."""
@@ -264,11 +351,11 @@ class AegearMainWindow(tk.Tk):
 
     def _tracking_threshold_changed(self, value):
         """Update the tracking threshold for the fish tracker."""
-        self._tracker.tracking_threshold = float(value) / 100.0
+        self._tracker.siamese_threshold = float(value) / 100.0
 
     def _detection_threshold_changed(self, value):
         """Update the detection threshold for the fish tracker."""
-        self._tracker.detection_threshold = float(value) / 100.0
+        self._tracker.heatmap_threshold = float(value) / 100.0
 
     def _trajectory_smooth_size_changed(self, value):
         """
@@ -372,11 +459,10 @@ class AegearMainWindow(tk.Tk):
 
             result = self._tracker.track(frame_image, frame_t, mask=background_mask)
             if result is not None:
-                (coordinates, confidence) = result
-                self._fish_tracking[frame_id] = (coordinates, confidence)
+                (coordinates, confidence) = result.centroid, result.confidence
                 self.track_bar.mark_processed(frame_id)
                 cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
-                self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
+                self._insert_tracking_point(frame_id, coordinates, confidence)
 
             self._display_image = draw_image.copy()
             self.update_image(self._display_image)
@@ -639,7 +725,7 @@ class AegearMainWindow(tk.Tk):
         if self._calibrated:
             frame = self._scene_calibration.rectify_image(frame)
         return frame
-
+    
     def _read_current_frame(self):
         """Return the current frame based on the slider."""
         return self._read_frame(self._get_current_frame_number())
@@ -661,11 +747,11 @@ class AegearMainWindow(tk.Tk):
         """Set the slider to a specific frame."""
         self.slider.set(frame)
 
-    def _prev_frame(self):
+    def previous_frame(self):
         """Move to the previous frame."""
         self._play_frame(self.slider.get() - 1)
 
-    def _next_frame(self):
+    def next_frame(self):
         """Move to the next frame."""
         self._play_frame(self.slider.get() + 1)
 
@@ -684,7 +770,7 @@ class AegearMainWindow(tk.Tk):
         """
         while self._playing:
             time.sleep(0.5 / self.clip.fps)
-            self.after(1, self._next_frame)
+            self.after(1, self.next_frame)
 
     def update_gui(self):
         """

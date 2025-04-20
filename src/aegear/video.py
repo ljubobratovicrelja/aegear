@@ -28,6 +28,10 @@ class VideoClip:
         success, frame = self._cap.read()
         if not success:
             return None
+        
+        # Convert BGR to RGB
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
         return frame
 
     def release(self):
