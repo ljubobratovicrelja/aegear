@@ -538,7 +538,7 @@ class AegearMainWindow(tk.Tk):
             return
         
         file_dict = {
-            "video": self.clip.filename,
+            "video": self.clip.path,
             "tracking": []
         }
 
@@ -567,7 +567,7 @@ class AegearMainWindow(tk.Tk):
             return
         
         file_dict = {
-            "video": self.clip.filename,
+            "video": self.clip.path,
             "trajectory": []
         }
 
@@ -600,13 +600,13 @@ class AegearMainWindow(tk.Tk):
 
     def _load_video(self):
         """Load a new video file and reinitialize the video processing."""
-        filename = filedialog.askopenfilename()
-        if filename == "":
+        path = filedialog.askopenfilename()
+        if path == "":
             messagebox.showerror("Error", "No video selected.")
             return
 
         try:
-            self.clip = VideoClip(filename)
+            self.clip = VideoClip(path)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load video: {e}")
             self.clip = None
