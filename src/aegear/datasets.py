@@ -1,11 +1,10 @@
 import os
-import time
 import glob
 import json
 import random
-import pickle
 from pathlib import Path
 from typing import Tuple
+from collections import OrderedDict
 
 import cv2
 import numpy as np
@@ -181,19 +180,15 @@ class TrackingDataset(Dataset):
         video_dir="",
         future_frame_seek=[1, 3, 5, 7],
         interpolation_smoothness=0.5,
-        max_epoch_samples=0,
-        randomized=False,
         augmentation_transform=None,
     ):
         with open(tracking_json_path, 'r') as f:
-            data = json.load(f)
+            data = json.load(f, object_pairs_hook=OrderedDict)
 
         self.video_path = os.path.join(video_dir, data["video"])
-        self.tracking = data["tracking"]
+        self.tracking = sorted(data["tracking"], key=lambda x: x["frame_id"])
         self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(interpolation_smoothness)
         self.future_frame_seek = future_frame_seek
-        self.max_epoch_samples = max_epoch_samples
-        self.randomized = randomized
 
         # Estimate FPS from video file
         self.video = cv2.VideoCapture(self.video_path)
@@ -218,14 +213,13 @@ class TrackingDataset(Dataset):
                 std=[0.229, 0.224, 0.225]
             )
 
-
     def _interpolate_tracking(self, interpolation_smoothness):
         frame_ids = np.array([pt["frame_id"] for pt in self.tracking])
         coords = np.array([pt["coordinates"] for pt in self.tracking])
 
         min_frame = int(frame_ids.min())
         max_frame = int(frame_ids.max())
-        dense_frames = np.arange(min_frame, max_frame + 1)
+        dense_frames = np.arange(min_frame, max_frame)
 
         rbf_x = Rbf(frame_ids, coords[:, 0], function='multiquadric', epsilon=interpolation_smoothness)
         rbf_y = Rbf(frame_ids, coords[:, 1], function='multiquadric', epsilon=interpolation_smoothness)
@@ -286,31 +280,37 @@ class TrackingDataset(Dataset):
         x0, y0 = center
         heatmap = torch.exp(-((x - x0)**2 + (y - y0)**2) / (2 * sigma**2))
         return heatmap
-    
-    def num_samples(self):
-        return self.max_frame - self.min_frame - max(self.future_frame_seek) - 1
 
     def __len__(self):
-        if self.max_epoch_samples > 0:
-            return min(self.max_epoch_samples, self.num_samples())
-        return self.num_samples()
+        max_future_seek = max(self.future_frame_seek)
+        last_frame = self.tracking[-1]["frame_id"]
+        num_margin_frames = 0
+
+        for i in range(len(self.tracking) - 1, -1, -1):
+            num_margin_frames += 1
+            if self.tracking[i]["frame_id"] + max_future_seek < last_frame:
+                break
+
+        return len(self.tracking) - num_margin_frames - 1
 
     def __del__(self):
         if self.video.isOpened():
             self.video.release()
 
     def __getitem__(self, idx):
-        if self.randomized and self.max_epoch_samples > 0:
-            idx = random.choice(range(self.num_samples()))
+        template_tracking = self.tracking[idx]
 
         # Reset seed with  time for max randomness
         frame_jump = random.choice(self.future_frame_seek)
 
-        template_frame_id = self.min_frame + idx
+        template_frame_id = template_tracking["frame_id"]
         search_frame_id = template_frame_id + frame_jump
 
-        template_coordinate = self.smooth_trajectory[idx]
-        search_coordinate = self.smooth_trajectory[idx + frame_jump]
+        template_smooth_id = template_frame_id - self.min_frame
+        search_smooth_id = template_smooth_id + frame_jump
+
+        template_coordinate = self.smooth_trajectory[template_smooth_id]
+        search_coordinate = self.smooth_trajectory[search_smooth_id]
 
         try:
             template = self._get_crop(template_frame_id, template_coordinate)
