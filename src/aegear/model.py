@@ -24,18 +24,18 @@ class EfficientUNet(nn.Module):
         features = list(backbone.features.children())
 
         # Encoder blocks with proper shape control
-        self.enc1 = nn.Sequential(*features[:2])    # [B, 16, 112, 112]
-        self.enc2 = nn.Sequential(*features[2:3])   # [B, 24, 56, 56]
-        self.enc3 = nn.Sequential(*features[3:4])   # [B, 40, 28, 28]
-        self.enc4 = nn.Sequential(*features[4:6])   # [B, 112, 14, 14]
-        self.enc5 = nn.Sequential(*features[6:])    # [B, 1280, 7, 7]
+        self.enc1 = nn.Sequential(*features[:2])
+        self.enc2 = nn.Sequential(*features[2:3])
+        self.enc3 = nn.Sequential(*features[3:4])
+        self.enc4 = nn.Sequential(*features[4:6])
+        self.enc5 = nn.Sequential(*features[6:])
 
         # Decoder blocks (in_channels = encoder out, out_channels = skip connection in)
-        self.up4 = self._up_block(1280, 112)  # 7 → 14
-        self.up3 = self._up_block(112, 40)    # 14 → 28
-        self.up2 = self._up_block(40, 24)     # 28 → 56
-        self.up1 = self._up_block(24, 16)     # 56 → 112
-        self.up0 = self._up_block(16, 8)      # 112 → 224
+        self.up4 = self._up_block(1280, 112)
+        self.up3 = self._up_block(112, 40)
+        self.up2 = self._up_block(40, 24)
+        self.up1 = self._up_block(24, 16)
+        self.up0 = self._up_block(16, 8)
 
         # Final conv to produce 1-channel heatmap
         self.out = nn.Conv2d(8, 1, kernel_size=1)
@@ -53,95 +53,69 @@ class EfficientUNet(nn.Module):
     
     def forward_with_decoded(self, x):
         """Forward pass with last decoder output return for interface with trajectory prediction."""
-        x1 = self.enc1(x)  # [B, 16, 112, 112]
-        x2 = self.enc2(x1) # [B, 24, 56, 56]
-        x3 = self.enc3(x2) # [B, 40, 28, 28]
-        x4 = self.enc4(x3) # [B, 112, 14, 14]
-        x5 = self.enc5(x4) # [B, 1280, 7, 7]
+        x1 = self.enc1(x)
+        x2 = self.enc2(x1)
+        x3 = self.enc3(x2)
+        x4 = self.enc4(x3)
+        x5 = self.enc5(x4)
 
-        d4 = self.up4(x5) + x4  # [B, 112, 14, 14]
-        d3 = self.up3(d4) + x3  # [B, 40, 28, 28]
-        d2 = self.up2(d3) + x2  # [B, 24, 56, 56]
-        d1 = self.up1(d2) + x1  # [B, 16, 112, 112]
-        d0 = self.up0(d1)       # [B, 8, 224, 224]
+        d4 = self.up4(x5) + x4
+        d3 = self.up3(d4) + x3
+        d2 = self.up2(d3) + x2
+        d1 = self.up1(d2) + x1
+        d0 = self.up0(d1)
 
         return self.out(d0), d0
 
 
-class ConvGRUCell(nn.Module):
-    def __init__(self, input_channels, hidden_channels, kernel_size=3):
+class SiameseTracker(nn.Module):
+    """
+    Siamese tracker using EfficientNet-B0 encoder features shared with a pretrained EfficientUNet.
+    Outputs a high-resolution response map for localization via conv head and upsampling blocks.
+    """
+    def __init__(self, unet=EfficientUNet(), head_type="conv"):
         super().__init__()
-        self.input_channels = input_channels
-        self.hidden_channels = hidden_channels
-        padding = kernel_size // 2
 
-        in_ch = input_channels + hidden_channels
-        self.reset_gate = nn.Conv2d(in_ch, hidden_channels, kernel_size, padding=padding)
-        self.update_gate = nn.Conv2d(in_ch, hidden_channels, kernel_size, padding=padding)
-        self.out_gate   = nn.Conv2d(in_ch, hidden_channels, kernel_size, padding=padding)
-
-    def forward(self, x, h):
-        if h is None:
-            B, _, H, W = x.shape
-            h = torch.zeros((B, self.hidden_channels, H, W), dtype=x.dtype, device=x.device)
-
-        combined = torch.cat([x, h], dim=1)  # [B, input+hidden, H, W]
-        z = torch.sigmoid(self.update_gate(combined))
-        r = torch.sigmoid(self.reset_gate(combined))
-        combined_reset = torch.cat([x, r * h], dim=1)
-        h_tilde = torch.tanh(self.out_gate(combined_reset))
-        h_new = (1 - z) * h + z * h_tilde
-        return h_new
-
-
-class ConvGRU(nn.Module):
-    def __init__(self, input_channels, hidden_channels, num_steps):
-        super().__init__()
-        self.cell = ConvGRUCell(input_channels, hidden_channels)
-        self.num_steps = num_steps
-
-    def forward(self, input_seq):
-        # input_seq: [B, T, C, H, W]
-        B, T, C, H, W = input_seq.shape
-        h = None
-        for t in range(T):
-            h = self.cell(input_seq[:, t], h)
-        return h  # [B, hidden_channels, H, W]
-
-
-class TemporalRefinedUNet(nn.Module):
-    HISTORY_LEN = 3  # Used to define expected sequence length (not strictly needed here)
-
-    def __init__(self, unet: nn.Module):
-        super().__init__()
-        self.unet = unet
-        self.convgru = ConvGRU(input_channels=2, hidden_channels=8, num_steps=self.HISTORY_LEN)
-        self.fusion = nn.Sequential(
-            nn.Conv2d(8 + 8, 8, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(8, 1, kernel_size=1)
+        # Reuse trained encoder from existing EfficientUNet instance
+        self.encoder = nn.Sequential(
+            unet.enc1,
+            unet.enc2,
+            unet.enc3,
+            unet.enc4,
+            unet.enc5,
         )
-    
-    def forward(self, rgb, timestamp, history=None):
-        raw_heatmap, decoder_feat = self.unet.forward_with_decoded(rgb)
 
-        if history is None:
-            return raw_heatmap
+        self.head_type = head_type
+        if head_type == "conv":
+            self.head = nn.Sequential(
+                nn.Conv2d(1280 * 2, 256, kernel_size=3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(256, 128, kernel_size=3, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(128, 32, kernel_size=2, stride=2),  # 7x7 -> 14x14
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(32, 1, kernel_size=2, stride=2),   # 14x14 -> 28x28
+            )
 
-        heatmaps, timestamps = history
-        B, T, _, H, W = heatmaps.shape
+    def forward(self, template, search):
+        """
+        template: (B, C, H, W)
+        search:   (B, C, H, W)
+        returns:  (B, 1, H_out, W_out) response map (e.g., 224x224)
+        """
+        feat_t = self.encoder(template)  # (B, 1280, h, w)
+        feat_s = self.encoder(search)    # (B, 1280, h, w)
 
-        dt = (timestamp[:, None] - timestamps).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        dt_map = dt.expand(-1, -1, 1, H, W)
+        if self.head_type == "conv":
+            x = torch.cat([feat_t, feat_s], dim=1)
+            out = self.head(x)
+        else:  # naive cross-correlation (legacy, unused)
+            B, C, H, W = feat_t.shape
+            out = torch.zeros(B, 1, H, W, device=feat_t.device)
+            for i in range(B):
+                out[i, 0] = F.conv2d(feat_s[i:i+1], feat_t[i:i+1], padding=0).squeeze(0)
 
-        heat_seq = torch.cat([heatmaps, dt_map], dim=2)
-
-        temporal_feat = self.convgru(heat_seq)
-        fused = self.fusion(torch.cat([temporal_feat, decoder_feat], dim=1))
-
-        return fused
-
-
+        return out
 
 class ConvClassifier(nn.Module):
     """
