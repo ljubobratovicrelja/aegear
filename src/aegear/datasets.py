@@ -335,7 +335,7 @@ class TrackingDataset(Dataset):
 
         heatmap_scale_diff = self._OUTPUT_SIZE / self._CROP_SIZE
         search_roi_hit = (search_coordinate - template_coordinate) * heatmap_scale_diff + self._OUTPUT_SIZE // 2
-        heatmap = TrackingDataset.generate_gaussian_heatmap(search_roi_hit, sigma=1.3).unsqueeze(0)
+        heatmap = TrackingDataset.generate_gaussian_heatmap(search_roi_hit, sigma=2.0).unsqueeze(0)
 
         return (
             template, search, heatmap
