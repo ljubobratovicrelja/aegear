@@ -213,8 +213,10 @@ class AegearMainWindow(tk.Tk):
         # Final GUI update and menu creation.
         self._setup_keypress_events()
         self._setup_image_mouse_events()
-        self.update_gui()
         self._create_menu()
+
+        # Refresh GUI drawing upon initialization.
+        self.update_gui()
 
         # Show window after setup.
         self.deiconify()
@@ -248,7 +250,6 @@ class AegearMainWindow(tk.Tk):
         self.update_gui()
     
     def _add_tracking_point(self, event):
-        print("Adding tracking point at ({}, {})".format(event.x, event.y))
         current_frame = self._get_current_frame_number()
         self._insert_tracking_point(current_frame, (event.x, event.y), 1.0)
     
@@ -642,10 +643,16 @@ class AegearMainWindow(tk.Tk):
                 self._screen_points = []
                 self.calibration_button['text'] = "Calibrate"
                 self.calibration_button['fg'] = "red"
-                self.image_label.unbind("<Button-1>")
+
+                # Rebind the button to add tracking points.
+                self.image_label.bind("<Button-1>", lambda event: self._add_tracking_point(event))
+
                 self._calibration_running = False
                 self._calibrated = False
+
+                # Rebind default mouse events.
                 self.update_gui()
+
                 return
 
         self._calibrated = False
@@ -683,7 +690,9 @@ class AegearMainWindow(tk.Tk):
             self.calibration_button['fg'] = "red"
 
         self._screen_points = []
-        self.image_label.unbind("<Button-1>")
+
+        self.image_label.bind("<Button-1>", lambda event: self._add_tracking_point(event))
+
         self._reload_frame()
         self.update_gui()
 
