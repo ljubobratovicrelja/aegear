@@ -131,7 +131,6 @@ class FishTracker:
             y2 = int(y + w_t)
 
             current_roi = frame[y1:y2, x1:x2]
-            #result = self._evaluate_heatmap_model(current_roi)
             result = self._evaluate_siamese_model(last_roi, current_roi)
 
             if result is not None:
@@ -167,14 +166,14 @@ class FishTracker:
         h, w = frame.shape[:2]
         results = []
 
-        w2 = self.WINDOW_SIZE
-        stride = int(self._stride * w2)
+        win_size = self.WINDOW_SIZE
+        stride = int(self._stride * win_size)
 
         for y in range(0, h, stride):
             for x in range(0, w, stride):
 
                 if mask is not None:
-                    mask_roi = mask[y:y+w2, x:x+w2]
+                    mask_roi = mask[y:y+win_size, x:x+win_size]
                     mask_sum = mask_roi.sum()
 
                     # Check if the window is in the mask.
@@ -182,12 +181,12 @@ class FishTracker:
                         continue
                 
                 try:
-                    window = frame[y:y+w2, x:x+w2]
+                    window = frame[y:y+win_size, x:x+win_size]
                 except:
                     # If we go out of bounds, we skip this window.
                     continue
 
-                if window.shape[0] != w2 or window.shape[1] != w2:
+                if window.shape[0] != win_size or window.shape[1] != win_size:
                     continue
 
                 result = self._evaluate_heatmap_model(window)
@@ -245,7 +244,7 @@ class FishTracker:
             return None
         
         # Resize the output to the original window size.
-        output_r = interpolate(output, size=(self.WINDOW_SIZE, self.WINDOW_SIZE), mode='bilinear', align_corners=False)
+        output_r = interpolate(output, size=window.shape[0:2], mode='bilinear', align_corners=False)
         
         result = FishTracker._get_centroid(output_r)
 
