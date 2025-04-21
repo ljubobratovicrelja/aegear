@@ -32,13 +32,13 @@ The name **Aegear** references **Ægir**, the Norse god of the sea, symbolizing 
 
 ## 🔬 Project Summary
 
-At the core of Aegear is a deep learning model for spatial fish localization, built on a U-Net-style architecture with an EfficientNet B0 encoder backbone. The encoder is initialized from `torchvision.models.efficientnet_b0(weights='IMAGENET1K_V1')`, with the first three stages frozen during training to preserve generic visual features. Decoder layers perform progressive upsampling using transposed convolutions, with skip connections linking each encoder stage to its corresponding decoder layer.
+At the core of Aegear is a deep learning system for spatial fish localization and tracking in video. The primary detection model is a **U-Net**-style architecture with an **EfficientNet-B0** encoder backbone, initialized from `torchvision.models.efficientnet_b0(weights='IMAGENET1K_V1')`. The first three encoder stages are frozen during training to retain general visual features. Decoder layers use transposed convolutions with skip connections to restore spatial resolution.
 
-The model produces a single-channel heatmap that reflects the likelihood and position of the fish within the input frame. Supervision is carried out using a weighted binary cross-entropy loss that emphasizes central activations, combined with a custom centroid distance loss to directly penalize spatial errors in predicted heatmap peaks. This training objective ensures precise localization under class imbalance and subtle visual cues.
+The model outputs a single-channel heatmap representing fish likelihood and position within each frame. Training uses a combination of weighted binary cross-entropy (focusing on central activations) and a custom centroid distance loss that penalizes spatial errors in predicted heatmap peaks, improving precision under class imbalance and subtle cues.
 
-Tracking is initialized using a sliding-window search constrained by motion segmentation via OpenCV’s KNN background subtraction algorithm (Zivkovic & van der Heijden, 2006). Once the target is detected, subsequent frames are processed with local search around the last known position. This localized tracking strategy offers robust performance in dynamic or noisy visual conditions and supports real-time execution on modern CUDA-enabled GPUs.
+Tracking is initialized using a sliding-window search constrained by motion segmentation via OpenCV’s KNN background subtraction algorithm (Zivkovic & van der Heijden, 2006). Once the target is detected, tracking operates through a **Siamese network** built on the same EfficientNet encoder, reusing weights from the detection model. The tracker compares features between two consecutive frames—using a template (previous frame) and a search region (current frame)—and applies a convolutional head to generate a response heatmap, yielding accurate and drift-free localization. When tracking confidence drops, Aegear falls back to a sliding-window application of the original EfficientUNet for re-detection, achieving robust, zero-drift tracking even in complex visual conditions.
 
-To allow for real-world quantification, Aegear includes a calibration module for metric scaling. Intrinsic parameters are obtained using Zhang’s method based on checkerboard imagery, while extrinsic calibration is performed by selecting four known reference points within the tank environment. This enables accurate reconstruction of fish trajectories in metric units (e.g., centimeters), suitable for downstream analysis of activity levels and behavioral patterns.
+For real-world analysis, Aegear includes a calibration module with intrinsic parameter estimation via Zhang’s method and extrinsic metric scaling from four known tank reference points. This enables reconstruction of fish trajectories in metric units (e.g., centimeters), suitable for behavioral and activity-level studies.
 
 In addition to the main pipeline, Aegear includes tools for:
 - camera calibration and manual ROI annotation from videos,
@@ -74,8 +74,6 @@ Since that initial application, Aegear has significantly expanded in scope. The 
 ## 🔮 Future Work
 
 Aegear is under active development and continues to expand beyond its initial scope. Planned or experimental features include:
-
-Trajectory prediction with temporal modeling: A GRU-based module is currently under development to process sequences of spatial heatmaps and predict the fish’s next position. This temporal prior aims to improve tracking stability under occlusion, noise, or visually ambiguous scenes.
 
 Multi-object support: Future releases may introduce multi-fish tracking, requiring new detection and association logic.
 
