@@ -100,7 +100,7 @@ class FishTracker:
         model.eval()
         return model
     
-    def track(self, frame, time, mask=None):
+    def track(self, frame, mask=None):
         if self.frame_size is None:
             self.frame_size = frame.shape[:2]
 
