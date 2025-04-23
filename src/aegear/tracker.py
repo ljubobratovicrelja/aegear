@@ -38,6 +38,51 @@ class Prediction:
             (centroid[0] + x,centroid[1] + y),
         )
 
+class Kalman2D:
+    def __init__(self, r=2.5, q=1.0):
+        """Initialize the Kalman filter.
+        
+        Parameters
+        ----------
+        r : float
+            The measurement noise.
+        q : float
+            The process noise.
+        """
+        self.x = np.zeros((4, 1))  # state
+        self.P = np.eye(4) * 1000  # uncertainty
+
+        self.A = np.array([[1, 0, 1, 0],
+                           [0, 1, 0, 1],
+                           [0, 0, 1, 0],
+                           [0, 0, 0, 1]])
+
+        self.H = np.array([[1, 0, 0, 0],
+                           [0, 1, 0, 0]])
+
+        self.R = np.eye(2) * r # measurement noise
+        self.Q = np.eye(4) * q # process noise
+
+    def reset(self, x, y):
+        self.x = np.array([[x], [y], [0], [0]])
+        self.P = np.eye(4)
+
+    def update(self, z):
+        # Predict
+        self.x = self.A @ self.x
+        self.P = self.A @ self.P @ self.A.T + self.Q
+
+        # Update
+        z = np.array(z).reshape(2, 1)
+        y = z - self.H @ self.x
+        S = self.H @ self.P @ self.H.T + self.R
+        K = self.P @ self.H.T @ np.linalg.inv(S)
+
+        self.x = self.x + K @ y
+        self.P = (np.eye(4) - K @ self.H) @ self.P
+
+        return self.x[0, 0], self.x[1, 0]
+
 class FishTracker:
 
     # Original window size for the training data.
@@ -59,7 +104,7 @@ class FishTracker:
 
         self._debug = debug
         self._stride = search_stride
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._device = FishTracker._select_device()
         self._transform = FishTracker._init_transform()
         self.heatmap_model = self._init_heatmap_model(heatmap_model_path)
         self.siamese_model = self._init_siamese_model(siamese_model_path)
@@ -68,6 +113,16 @@ class FishTracker:
         self.last_result = None
         self.history = []
         self.frame_size = None
+        self.kalman = Kalman2D()
+    
+    def _select_device():
+        """Select the device - try CUDA, if fails, try mps for Apple Silicon, else CPU."""
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            return torch.device("mps")
+        else:
+            return torch.device("cpu")
     
     def _init_transform():
         """Initialize the transform."""
@@ -110,7 +165,12 @@ class FishTracker:
         if self.last_result is None:
             self._debug_print("sliding")
             # Do a sliding window over the whole frame to try and find our fish.
-            self.last_result = self._sliding_window_predict(frame, mask)
+            result = self._sliding_window_predict(frame, mask)
+
+            if result is not None:
+                centroid, roi = result
+                self.kalman.reset(centroid.centroid[0], centroid.centroid[1])
+                self.last_result = (centroid, roi)
         else:
             self._debug_print("tracking")
             # Try getting a ROI around the last position.
@@ -134,7 +194,12 @@ class FishTracker:
             result = self._evaluate_siamese_model(last_roi, current_roi)
 
             if result is not None:
-                self.last_result = (result.global_coordinates((x1, y1)), current_roi)
+                prediction = result.global_coordinates((x1, y1))
+                x, y = self.kalman.update(prediction.centroid)
+                prediction.centroid = (int(x), int(y))
+
+                self.last_result = (prediction, current_roi)
+
                 self._debug_print(f"Found fish at ({result.centroid}) with confidence {result.confidence}")
             else:
                 self.last_result = None
