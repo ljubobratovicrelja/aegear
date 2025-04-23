@@ -181,6 +181,8 @@ class TrackingDataset(Dataset):
         future_frame_seek=[1, 3, 5, 7],
         interpolation_smoothness=0.5,
         augmentation_transform=None,
+        rotation_range=None,
+        scale_range=None
     ):
         with open(tracking_json_path, 'r') as f:
             data = json.load(f, object_pairs_hook=OrderedDict)
@@ -189,6 +191,8 @@ class TrackingDataset(Dataset):
         self.tracking = sorted(data["tracking"], key=lambda x: x["frame_id"])
         self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(interpolation_smoothness)
         self.future_frame_seek = future_frame_seek
+        self.rotation_range = rotation_range
+        self.scale_range = scale_range
 
         # Estimate FPS from video file
         self.video = cv2.VideoCapture(self.video_path)
@@ -257,19 +261,76 @@ class TrackingDataset(Dataset):
 
         return img
 
-    def _get_crop(self, frame_id, center):
+    def _get_crop(self, frame_id, center, transform: Tuple[float, float]):
         frame = self._read_frame(frame_id)
 
-        x1 = int(center[0] - self._CROP_SIZE // 2)
-        y1 = int(center[1] - self._CROP_SIZE // 2)
-        x2 = x1 + self._CROP_SIZE
-        y2 = y1 + self._CROP_SIZE
+        if transform is None:
+            x1 = int(center[0] - self._CROP_SIZE // 2)
+            y1 = int(center[1] - self._CROP_SIZE // 2)
+            x2 = x1 + self._CROP_SIZE
+            y2 = y1 + self._CROP_SIZE
 
-        # Bail out if crop goes out of bounds
-        if x1 < 0 or y1 < 0 or x2 > frame.shape[1] or y2 > frame.shape[0]:
-            raise IndexError("Crop out of bounds")
+            if x1 < 0 or y1 < 0 or x2 > frame.shape[1] or y2 > frame.shape[0]:
+                raise IndexError("Crop out of bounds")
 
-        return frame[y1:y2, x1:x2, :]
+            return frame[y1:y2, x1:x2, :]
+        else:
+            rotation_deg, scale = transform
+            crop_size_large = self._CROP_SIZE * 2
+
+            # Compute top-left corner of the large crop
+            x1 = int(center[0] - crop_size_large // 2)
+            y1 = int(center[1] - crop_size_large // 2)
+            x2 = x1 + crop_size_large
+            y2 = y1 + crop_size_large
+
+            if x1 < 0 or y1 < 0 or x2 > frame.shape[1] or y2 > frame.shape[0]:
+                raise IndexError("Crop out of bounds")
+
+            crop = frame[y1:y2, x1:x2, :]
+
+            center_point = (crop_size_large // 2, crop_size_large // 2)
+            M = cv2.getRotationMatrix2D(center_point, rotation_deg, scale)
+
+            rotated = cv2.warpAffine(crop, M, (crop_size_large, crop_size_large), flags=cv2.INTER_LINEAR)
+
+            # Final center crop to self._CROP_SIZE
+            start = crop_size_large // 2 - self._CROP_SIZE // 2
+            end = start + self._CROP_SIZE
+
+            return rotated[start:end, start:end, :]
+
+    @staticmethod
+    def transform_offset_for_heatmap(offset, transform: Tuple[float, float], crop_size: int, output_size: int):
+        """
+        Apply rotation and scale to an offset vector, then map to heatmap coordinates.
+
+        Args:
+            offset: np.ndarray shape (2,), the vector (search - template)
+            transform: Tuple[float, float] = (rotation_deg, scale)
+            crop_size: size of the crop (before downscaling to heatmap)
+            output_size: final heatmap output size
+
+        Returns:
+            np.ndarray of shape (2,), transformed and rescaled offset in heatmap coordinates
+        """
+
+        if transform:
+            rotation_deg, scale = transform
+            theta = np.deg2rad(rotation_deg)
+
+            # 2D rotation matrix with scale
+            R = np.array([
+                [np.cos(theta), -np.sin(theta)],
+                [np.sin(theta),  np.cos(theta)]
+            ]) * scale
+
+            offset = R @ offset
+
+        heatmap_scale = output_size / crop_size
+        search_roi_hit = offset * heatmap_scale + output_size // 2
+
+        return search_roi_hit
 
     @staticmethod
     def generate_gaussian_heatmap(center, sigma=2.0):
@@ -300,6 +361,13 @@ class TrackingDataset(Dataset):
     def __getitem__(self, idx):
         template_tracking = self.tracking[idx]
 
+        if self.rotation_range or self.scale_range:
+            rotation_deg = np.random.uniform(-self.rotation_range, self.rotation_range) if self.rotation_range else 0.0
+            scale = np.random.uniform(1 - self.scale_range, 1 + self.scale_range) if self.scale_range else 1.0
+            transform = (rotation_deg, scale)
+        else:
+            transform = None
+
         # Reset seed with  time for max randomness
         frame_jump = random.choice(self.future_frame_seek)
 
@@ -313,8 +381,8 @@ class TrackingDataset(Dataset):
         search_coordinate = self.smooth_trajectory[search_smooth_id]
 
         try:
-            template = self._get_crop(template_frame_id, template_coordinate)
-            search = self._get_crop(search_frame_id, template_coordinate)
+            template = self._get_crop(template_frame_id, template_coordinate, transform)
+            search = self._get_crop(search_frame_id, template_coordinate, transform)
         except IndexError:
             return self.__getitem__((idx + 1) % len(self))
         
@@ -333,11 +401,16 @@ class TrackingDataset(Dataset):
         template = self.normalize(template)
         search = self.normalize(search)
 
-        heatmap_scale_diff = self._OUTPUT_SIZE / self._CROP_SIZE
-        search_roi_hit = (search_coordinate - template_coordinate) * heatmap_scale_diff + self._OUTPUT_SIZE // 2
+        #heatmap_scale_diff = self._OUTPUT_SIZE / self._CROP_SIZE
+        #search_roi_hit = (search_coordinate - template_coordinate) * heatmap_scale_diff + self._OUTPUT_SIZE // 2
+
+        offset = np.array(search_coordinate) - np.array(template_coordinate)
+        search_roi_hit = TrackingDataset.transform_offset_for_heatmap(offset, transform, self._CROP_SIZE, self._OUTPUT_SIZE)
+
         heatmap = TrackingDataset.generate_gaussian_heatmap(search_roi_hit, sigma=2.0).unsqueeze(0)
 
         return (
             template, search, heatmap
         )
+    
         
