@@ -9,36 +9,8 @@ import cv2
 import numpy as np
 from scipy.signal import savgol_filter
 
-# Global image size bounds (should be set before calling `inBounds`)
-IMROWS = 1080
-IMCOLS = 1920
 
-
-def inBounds(cx: int, cy: int, s2: int) -> bool:
-    """
-    Check whether a square region centered at (cx, cy) with half-size `s2`
-    is fully within the image bounds.
-
-    Parameters:
-        cx (int): x-coordinate of center.
-        cy (int): y-coordinate of center.
-        s2 (int): Half-size of the square region.
-
-    Returns:
-        bool: True if region is within bounds, False otherwise.
-    """
-    p1 = (cy - s2, cx - s2)
-    p2 = (cy + s2, cx + s2)
-
-    if p1[0] < 0 or p1[1] < 0:
-        return False
-    if p2[0] >= IMROWS or p2[1] >= IMCOLS:
-        return False
-
-    return True
-
-
-def trajectoryLength(trajectory: list[tuple[int, int]]) -> float:
+def trajectory_length(trajectory: list[tuple[int, int]]) -> float:
     """
     Compute the total length of a 2D trajectory.
 
@@ -60,7 +32,7 @@ def trajectoryLength(trajectory: list[tuple[int, int]]) -> float:
     return sumlength
 
 
-def smoothTrajectory(trajectory: list[tuple[int, int]], filterSize: int = 15) -> list[tuple[int, int]]:
+def smooth_trajectory(trajectory: list[tuple[int, int]], filterSize: int = 15) -> list[tuple[int, int]]:
     """
     Apply Savitzky-Golay filter to smooth a trajectory.
 
@@ -81,8 +53,7 @@ def smoothTrajectory(trajectory: list[tuple[int, int]], filterSize: int = 15) ->
     smoothed = list(zip(x.astype(int), y.astype(int)))
     return smoothed
 
-
-def drawTrajectory(
+def draw_trajectory(
     frame: np.ndarray,
     trajectory: list[tuple[int, int]],
     thickness: int = 1,

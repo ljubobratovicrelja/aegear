@@ -14,7 +14,7 @@ from tkinter import ttk
 
 # Internal modules
 from aegear.calibration import SceneCalibration
-from aegear.trajectory import trajectoryLength, smoothTrajectory, drawTrajectory
+from aegear.trajectory import trajectory_length, smooth_trajectory, draw_trajectory
 from aegear.tracker import FishTracker
 from aegear.gui.tracking_bar import TrackingBar
 from aegear.utils import resource_path
@@ -23,7 +23,7 @@ from aegear.video import VideoClip
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
 HEATMAP_MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-04-04.pth")
-SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-04-22.pth")
+SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-04-23.pth")
 
 class AegearMainWindow(tk.Tk):
     """
@@ -240,18 +240,25 @@ class AegearMainWindow(tk.Tk):
         current_frame = self._get_current_frame_number()
         if current_frame in self._fish_tracking:
             del self._fish_tracking[current_frame]
+        
+        self.update_smooth_trajectory()
         self._rebuild_tracking_listbox()
     
     def _rebuild_tracking_listbox(self):
         """Rebuild the tracking listbox from the current fish tracking data."""
         self.tracking_listbox.delete(0, tk.END)
-        for frame_id, (coordinates, confidence) in sorted(self._fish_tracking.items()):
+        for frame_id, (_, confidence) in sorted(self._fish_tracking.items()):
             self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
         self.update_gui()
     
+    def update_smooth_trajectory(self):
+        trajectory = np.array([ coordinates for coordinates, _ in self._fish_tracking.values() ])
+        self._smooth_trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
+
+    
     def _add_tracking_point(self, event):
         current_frame = self._get_current_frame_number()
-        self._insert_tracking_point(current_frame, (event.x, event.y), 1.0)
+        self.insert_tracking_point(current_frame, (event.x, event.y), 1.0)
     
     def _next_tracked_frame(self):
         """Move to the next tracked frame."""
@@ -286,10 +293,7 @@ class AegearMainWindow(tk.Tk):
     
     def _remove_current_frame_track(self, event):
         current_frame = self._get_current_frame_number()
-        if current_frame in self._fish_tracking:
-            del self._fish_tracking[current_frame]
-            self.tracking_listbox.delete(tk.END)
-        self.update_gui()
+        self.remove_tracking_point(current_frame)
     
     def _seek_frames(self, event):
         """Move to the tracked frame based on mouse wheel scroll."""
@@ -298,12 +302,21 @@ class AegearMainWindow(tk.Tk):
         else:
             self.previous_frame()
     
-    def _insert_tracking_point(self, frame_id, coordinates, confidence):
+    def insert_tracking_point(self, frame_id, coordinates, confidence):
         """Insert a tracking point into the listbox."""
         self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
         self._fish_tracking[frame_id] = (coordinates, confidence)
         self.track_bar.mark_processed(frame_id)
+        self.update_smooth_trajectory()
         self.update_gui()
+    
+    def remove_tracking_point(self, frame_id):
+        """Remove a tracking point from the listbox."""
+        if frame_id in self._fish_tracking:
+            del self._fish_tracking[frame_id]
+            self.tracking_listbox.delete(0, tk.END)
+            self.update_smooth_trajectory()
+            self.update_gui()
 
     def _create_menu(self):
         """Set up the application menu bar."""
@@ -368,6 +381,8 @@ class AegearMainWindow(tk.Tk):
             v += 1
         self._trajectory_smooth_size = v
         self.smooth_trajectory_scale.set(v)
+
+        self.update_smooth_trajectory()
         self.update_gui()
 
     def _trajectory_frame_skip_changed(self, value):
@@ -423,7 +438,7 @@ class AegearMainWindow(tk.Tk):
 
         start_time = time.time()
 
-        for frame_id in range(track_start_frame, track_end_frame, self._trajectory_frame_skip):
+        for i, frame_id in enumerate(range(track_start_frame, track_end_frame, self._trajectory_frame_skip)):
             # Skip first and last frames where tracking context is insufficient.
             if frame_id == 0 or frame_id == self._num_frames:
                 continue
@@ -438,7 +453,10 @@ class AegearMainWindow(tk.Tk):
                 int((estimated_time // 60) % 60),
                 int(estimated_time % 60)
             )
-            progress_label['text'] = "Progress: {}%, estimated time: {}".format(int(progress_value), estimated_time_str)
+
+            # Compute average FPS of the processing.
+            processing_frames_per_second = ((i + 1) / elapsed_time) * self._trajectory_frame_skip if elapsed_time > 0 else 0.0
+            progress_label['text'] = f"Progress: {progress_value:.2f}%, estimated time: {estimated_time_str}, FPS: {processing_frames_per_second:.2f}"
 
             # Read and process the current frame.
             frame_image = self._read_frame(frame_id)
@@ -460,10 +478,9 @@ class AegearMainWindow(tk.Tk):
                 (coordinates, confidence) = result.centroid, result.confidence
                 self.track_bar.mark_processed(frame_id)
                 cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
-                self._insert_tracking_point(frame_id, coordinates, confidence)
+                self.insert_tracking_point(frame_id, coordinates, confidence)
 
-            self._display_image = draw_image.copy()
-            self.update_image(self._display_image)
+            self.update_frame(frame_id, draw_image)
             self.update()
 
         task_window.transient(self)
@@ -570,7 +587,7 @@ class AegearMainWindow(tk.Tk):
         for (coordinates, _) in self._fish_tracking.values():
             trajectory.append(coordinates)
         
-        trajectory = smoothTrajectory(trajectory, self._trajectory_smooth_size)
+        trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
         start_frame = next(iter(self._fish_tracking))
 
         if start_frame is None:
@@ -783,14 +800,12 @@ class AegearMainWindow(tk.Tk):
         self.update_image(self._display_image)
         self.label['text'] = self._frame_to_time(float(self._get_current_frame_number()), self.clip.fps)
 
-    def _draw_motion(self, motion):
+    def update_frame(self, frame_id, image):
         """
-        Overlay the motion detection result on the display image.
+        Update the display image with the current frame and overlay motion detection.
         """
-        motion_overlay = cv2.resize(motion, (self._display_image.shape[1], self._display_image.shape[0]))
-        motion_overlay = cv2.cvtColor(motion_overlay, cv2.COLOR_GRAY2BGR)
-        motion_overlay = (motion_overlay * 255).astype(np.uint8)  # Scale mask to 255.
-        self._display_image = cv2.addWeighted(self._display_image, 0.5, motion_overlay, 0.5, 0)
+        self.slider.set(frame_id)
+        self.update_image(self._display_image)
 
     def update_image(self, image):
         """
@@ -800,6 +815,7 @@ class AegearMainWindow(tk.Tk):
         if image is None:
             return
 
+        self._display_image = image.copy()
         image = image.copy()
 
         # Draw calibration points.
@@ -810,23 +826,13 @@ class AegearMainWindow(tk.Tk):
         frame_id = self._get_current_frame_number()
         if frame_id in self._fish_tracking:
             ((x, y), _) = self._fish_tracking[frame_id]
-            image = cv2.circle(image, (x, y), 12, (0, 255, 0))
+            image = cv2.circle(image, (x, y), 5, (0, 255, 0), 2, cv2.LINE_AA)
 
         # Draw trajectory if enabled.
         if self._draw_trajectory.get() and len(self._fish_tracking) > 1:
-            trajectory = []
-            tracked_frames = sorted(list(self._fish_tracking.keys()))
-            for frame_id in tracked_frames:
-                if frame_id >= self._get_current_frame_number():
-                    break
-                centroid, _ = self._fish_tracking[frame_id]
-                trajectory.append(centroid)
-
-            s_trajectory = smoothTrajectory(trajectory, self._trajectory_smooth_size)
-            travelDistance = trajectoryLength(s_trajectory) * self._pixel_to_cm_ratio
-
+            travelDistance = trajectory_length(self._smooth_trajectory) * self._pixel_to_cm_ratio
             self.distance_status_bar['text'] = "Distance: {} cm".format(travelDistance)
-            image = drawTrajectory(image, s_trajectory)
+            image = draw_trajectory(image, self._smooth_trajectory)
 
         # Convert image from OpenCV format to PIL, then to Tkinter-compatible image.
         image = Image.fromarray(image)
