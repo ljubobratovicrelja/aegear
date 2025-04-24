@@ -39,7 +39,7 @@ class Prediction:
         )
 
 class Kalman2D:
-    def __init__(self, r=2.5, q=1.0):
+    def __init__(self, r=5.0, q=0.1):
         """Initialize the Kalman filter.
         
         Parameters
@@ -168,9 +168,11 @@ class FishTracker:
             result = self._sliding_window_predict(frame, mask)
 
             if result is not None:
-                centroid, roi = result
-                self.kalman.reset(centroid.centroid[0], centroid.centroid[1])
-                self.last_result = (centroid, roi)
+                prediction, roi = result
+                self.kalman.reset(prediction.centroid[0], prediction.centroid[1])
+                self.last_result = (prediction, roi)
+
+                return prediction
         else:
             self._debug_print("tracking")
             # Try getting a ROI around the last position.
@@ -194,19 +196,18 @@ class FishTracker:
             result = self._evaluate_siamese_model(last_roi, current_roi)
 
             if result is not None:
+                self.last_result = (result.global_coordinates((x1, y1)), current_roi)
+
                 prediction = result.global_coordinates((x1, y1))
                 x, y = self.kalman.update(prediction.centroid)
                 prediction.centroid = (int(x), int(y))
 
-                self.last_result = (prediction, current_roi)
-
                 self._debug_print(f"Found fish at ({result.centroid}) with confidence {result.confidence}")
-            else:
-                self.last_result = None
-                self._debug_print("No fish found")
 
-        if self.last_result is not None:
-            return self.last_result[0]
+                return prediction
+
+        self.last_result = None
+        self._debug_print("No fish found")
 
         return None
 
