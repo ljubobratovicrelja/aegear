@@ -99,6 +99,8 @@ cd aegear
 pip install -e .[dev]
 ```
 
+**Note**: Best do this in an virtual environment because of heavy dependencies that Aegear carries along with its install.
+
 This mode is ideal for working with Jupyter notebooks or customizing the codebase.
 
 ---
@@ -111,7 +113,11 @@ Aegear includes a desktop GUI built with Tkinter. Once installed, the app can be
 aegear-gui
 ```
 
-This requires Python ≥3.10 and a working Tkinter environment. If you're installing system-wide, make sure tkinter is available (e.g., sudo apt install python3-tk on Ubuntu/Debian).
+This requires Python ≥3.10 and a working Tkinter environment. Therefore make sure that Tkinter and Python with Tk support is installed on your machine.
+
+### 🛠️ Prebuilt binaries
+
+There are also included binaries made using PyInstaller for Win64 and macOS machines with Apple Silicon within [the release packages](https://github.com/ljubobratovicrelja/aegear/releases). However keep in mind that Windows builds include the basic PyTorch version (without CUDA). To run `aegear-gui` with CUDA, remove the preinstalled torch and [install your pytorch version](https://pytorch.org/) matching your installed CUDA runtime (Aegear models are tested using CUDA Toolkit version 12.4).
 
 > ⚠️ Experimental Notice:
 > The current GUI is designed specifically for the video format and calibration workflow used in the original Russian sturgeon experiments. It assumes a specific directory structure and input format.
