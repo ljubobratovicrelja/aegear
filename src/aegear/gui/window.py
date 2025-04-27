@@ -57,7 +57,7 @@ class AegearMainWindow(tk.Tk):
         self._first_frame_position = None
         self._fish_tracking = {}
         self._trajectory_smooth_size = 9
-        self._trajectory_frame_skip = 5
+        self._trajectory_frame_skip = 7
         self._screen_points = []  # Screen points used for calibration.
 
         # Boolean variable to control drawing the trajectory.
@@ -73,7 +73,8 @@ class AegearMainWindow(tk.Tk):
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Initialize the fish tracker.
-        self._tracker = FishTracker(HEATMAP_MODEL_PATH, SIAMESE_MODEL_PATH, tracking_threshold=0.75, detection_threshold=0.80, debug=False, search_stride=0.75)
+        self._tracker = FishTracker(HEATMAP_MODEL_PATH, SIAMESE_MODEL_PATH, detection_threshold=0.85, debug=False, search_stride=0.5)
+        self._tracking_threshold = 0.9
 
         if initial_video == "":
             # No video selected; show error and exit.
@@ -159,7 +160,7 @@ class AegearMainWindow(tk.Tk):
         self.tracking_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100,
                                                  orient=tk.HORIZONTAL, label="Tracking Threshold",
                                                  command=self._tracking_threshold_changed)
-        self.tracking_threshold_scale.set(int(self._tracker.siamese_threshold * 100.0))
+        self.tracking_threshold_scale.set(int(self._tracking_threshold * 100.0))
         self.tracking_threshold_scale.pack(side=tk.LEFT)
 
         self.detection_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100,
@@ -365,7 +366,7 @@ class AegearMainWindow(tk.Tk):
 
     def _tracking_threshold_changed(self, value):
         """Update the tracking threshold for the fish tracker."""
-        self._tracker.siamese_threshold = float(value) / 100.0
+        self._tracking_threshold = float(value) / 100.0
 
     def _detection_threshold_changed(self, value):
         """Update the detection threshold for the fish tracker."""
@@ -389,115 +390,112 @@ class AegearMainWindow(tk.Tk):
         """Update the frame skip value used during tracking."""
         self._trajectory_frame_skip = int(value)
 
+    def _build_task_window(self) -> tuple[tk.Toplevel, tk.Label, ttk.Progressbar]:
+        """Create a new window for tracking progress."""
+
+        win = tk.Toplevel(self)
+        win.title("Tracking")
+        win.geometry("350x130")
+
+        label = tk.Label(win, text="Progress: 0%")
+        label.pack()
+        bar = ttk.Progressbar(win, length=240)
+        bar.pack(pady=15)
+        tk.Button(win, text="Cancel", command=win.destroy).pack()
+
+        return win, label, bar
+
     def _run_tracking(self):
-        """
-        Run the fish tracking process over a range of frames.
-        Displays progress and estimates remaining time.
-        """
+        """Run tracking on the selected frames."""
+
         if self._tracker is None:
             messagebox.showerror("Error", "Tracking model not initialized.")
             return
-
         if self.track_bar.processing_start is None or self.track_bar.processing_end is None:
             messagebox.showerror("Error", "Please set the processing start and end frames.")
             return
 
-        # Create a modal task window for tracking progress.
-        task_window = tk.Toplevel(self)
-        task_window.title("Tracking")
-        task_window.geometry("300x120")
+        task_win, progress_lbl, progress_bar = self._build_task_window()
 
-        progress_label = tk.Label(task_window, text="Progress: 0%")
-        progress_label.pack()
+        start_frame = self.track_bar.processing_start
+        end_frame = self.track_bar.processing_end
+        max_skip = max(1, int(self._trajectory_frame_skip))
+        current_skip = max_skip
+        anchor_frame = start_frame
 
-        progress = ttk.Progressbar(task_window, length=200)
-        progress.pack(pady=20)
+        t0 = time.time()
+        timeline_len = end_frame - start_frame
 
-        cancel_button = tk.Button(task_window, text="Cancel", command=task_window.destroy)
-        cancel_button.pack()
+        # BGS warm‑up
+        bgs = cv2.createBackgroundSubtractorKNN(history=100)
+        for fid in range(max(start_frame - 10, 0), start_frame):
+            f = self._read_frame(fid)
+            if f is None:
+                continue
+            g = cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_RGB2GRAY), (3, 3), 1.0)
+            bgs.apply(g)
 
-        progress['value'] = 0
-        track_start_frame = self.track_bar.processing_start
-        track_end_frame = self.track_bar.processing_end
-
-        # Calculate progress increment per frame processed.
-        progress_increment = 100.0 / ((track_end_frame - track_start_frame) / self._trajectory_frame_skip)
-        progress_value = 0.0
-
-        # Initialize background subtractor for motion detection.
-        bck_substractor = cv2.createBackgroundSubtractorKNN(history=100)
-
-        # Clear previous tracking data.
         self._tracker.reset()
 
-        # Warm up background subtractor using preceding frames.
-        for frame_id in range(max(track_start_frame - 10, 0), track_start_frame):
-            frame_image = self._read_frame(frame_id)
-            if frame_image is None:
-                continue
-            gframe_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2GRAY)
-            gframe_image = cv2.medianBlur(gframe_image, 3)
-            bck_substractor.apply(gframe_image)
+        while anchor_frame < end_frame and task_win.winfo_exists():
+            candidate = anchor_frame + current_skip
+            if candidate >= end_frame:
+                break
 
-        start_time = time.time()
+            # UI: progress / ETA / FPS
+            done = anchor_frame - start_frame
+            pct = (done / max(timeline_len, 1)) * 100.0
+            elapsed = time.time() - t0
+            eta_sec = (elapsed / max(pct, 0.001)) * (100.0 - pct)
+            h, rem = divmod(int(eta_sec), 3600)
+            m, s = divmod(rem, 60)
+            video_fps = (done or 1) / max(elapsed, 1e-6)
+            progress_lbl["text"] = (
+                f"Progress: {pct:5.1f}% | ETA {h:02d}:{m:02d}:{s:02d} | FPS {video_fps:5.1f}")
+            progress_bar["value"] = pct
+            task_win.update_idletasks()
 
-        for i, frame_id in enumerate(range(track_start_frame, track_end_frame, self._trajectory_frame_skip)):
-            # Skip first and last frames where tracking context is insufficient.
-            if frame_id == 0 or frame_id == self._num_frames:
-                continue
+            # Read and pre‑process the candidate.
+            frame = self._read_frame(candidate)
+            g = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY), (3, 3), 1.0)
+            mask = bgs.apply(g)
+            k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k)
+            _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
 
-            progress_value += progress_increment
-            progress['value'] = progress_value
+            result = self._tracker.track(frame, mask=mask)
 
-            elapsed_time = time.time() - start_time
-            estimated_time = elapsed_time / progress_value * 100.0 - elapsed_time
-            estimated_time_str = "{:02d}:{:02d}:{:02d}".format(
-                int(estimated_time // 3600),
-                int((estimated_time // 60) % 60),
-                int(estimated_time % 60)
-            )
+            good = result is not None and result.confidence >= self._tracking_threshold
 
-            # Compute average FPS of the processing.
-            processing_frames_per_second = ((i + 1) / elapsed_time) * self._trajectory_frame_skip if elapsed_time > 0 else 0.0
-            progress_label['text'] = f"Progress: {progress_value:.2f}%, estimated time: {estimated_time_str}, FPS: {processing_frames_per_second:.2f}"
+            draw = frame.copy()
+            if good:
+                cv2.circle(draw, result.centroid, 5, (255, 0, 0), -1)
+                self.insert_tracking_point(candidate, result.centroid, result.confidence)
 
-            # Read and process the current frame.
-            frame_image = self._read_frame(frame_id)
+                self.track_bar.mark_processed(candidate)
+                self.update_frame(candidate, draw)
+                self.update()
 
-            gframe_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2GRAY)
-            gframe_image = cv2.medianBlur(gframe_image, 3)
-            background_mask = bck_substractor.apply(gframe_image)
+                anchor_frame = candidate
+                if current_skip < max_skip:
+                    current_skip = min(current_skip * 2, max_skip)
+            else:
+                if current_skip > 1:
+                    current_skip = max(current_skip // 2, 1)
+                    continue
 
-            # Apply morphological operations to reduce noise.
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-            background_mask = cv2.erode(background_mask, kernel, iterations=1)
-            background_mask = cv2.dilate(background_mask, kernel, iterations=1)
-            _, background_mask = cv2.threshold(background_mask, 127, 255, cv2.THRESH_BINARY)
+                self.track_bar.mark_processed(candidate)
+                self.update_frame(candidate, draw)
+                self.update()
 
-            draw_image = frame_image.copy()
-            frame_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
+                anchor_frame = candidate
 
-            result = self._tracker.track(frame_image, mask=background_mask)
+        # UI cleanup
+        if task_win.winfo_exists():
+            task_win.grab_set()
+            task_win.destroy()
 
-            if result is not None:
-                (coordinates, confidence) = result.centroid, result.confidence
-                self.track_bar.mark_processed(frame_id)
-                cv2.circle(draw_image, coordinates, 5, (255, 0, 0), -1)
-                self.insert_tracking_point(frame_id, coordinates, confidence)
-
-            self.update_frame(frame_id, draw_image)
-            self.update()
-
-        task_window.transient(self)
-        task_window.grab_set()
-        task_window.destroy()
-
-        try:
-            self.wait_window(task_window)
-        except Exception:
-            pass
-
-        self._play_frame(track_start_frame)
+        self._play_frame(start_frame)
 
     def _set_track_start(self):
         """Set the current slider position as the start of processing."""

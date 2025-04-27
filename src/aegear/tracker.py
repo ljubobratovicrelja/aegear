@@ -97,7 +97,6 @@ class FishTracker:
     def __init__(self,
                  heatmap_model_path,
                  siamese_model_path,
-                 tracking_threshold=0.85,
                  detection_threshold=0.95,
                  search_stride=0.5,
                  debug=False):
@@ -108,7 +107,6 @@ class FishTracker:
         self._transform = FishTracker._init_transform()
         self.heatmap_model = self._init_heatmap_model(heatmap_model_path)
         self.siamese_model = self._init_siamese_model(siamese_model_path)
-        self.siamese_threshold = tracking_threshold
         self.heatmap_threshold = detection_threshold
         self.last_result = None
         self.history = []
@@ -301,7 +299,7 @@ class FishTracker:
         """
 
         # Prepare the input.
-        input = self._transform(cv2.cvtColor(window, cv2.COLOR_BGR2RGB)) \
+        input = self._transform(window) \
                     .to(self._device) \
                     .unsqueeze(0)
 
@@ -333,11 +331,11 @@ class FishTracker:
     def _evaluate_siamese_model(self, last_roi, current_roi) -> Prediction:
 
         # Prepare the input.
-        template = self._transform(cv2.cvtColor(last_roi, cv2.COLOR_BGR2RGB)) \
+        template = self._transform(last_roi) \
                     .to(self._device) \
                     .unsqueeze(0)
 
-        search = self._transform(cv2.cvtColor(current_roi, cv2.COLOR_BGR2RGB)) \
+        search = self._transform(current_roi) \
                     .to(self._device) \
                     .unsqueeze(0)
 
@@ -358,10 +356,6 @@ class FishTracker:
             return None
         
         (confidence, centroid) = result
-
-        if confidence < self.siamese_threshold:
-            self._debug_print(f"Siamese: Confidence {confidence} is below threshold {self.siamese_threshold}")
-            return None
         
         return Prediction(confidence, centroid)
 
