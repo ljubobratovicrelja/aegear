@@ -1,4 +1,7 @@
 # aegear-gui.spec
+
+import sys
+
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import collect_data_files
 from pathlib import Path
@@ -38,6 +41,11 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+if sys.platform == 'darwin':
+    icon_file = 'media/icon.icns'
+else:
+    icon_file = 'media/icon.ico'
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -53,5 +61,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='media/icon.ico',
+    icon=icon_file
 )
