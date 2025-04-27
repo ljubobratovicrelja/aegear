@@ -39,7 +39,7 @@ class Prediction:
         )
 
 class Kalman2D:
-    def __init__(self, r=5.0, q=0.1):
+    def __init__(self, r=2.5, q=0.1):
         """Initialize the Kalman filter.
         
         Parameters
@@ -290,6 +290,9 @@ class FishTracker:
         confidence = heatmap[0, 0, y, x].item()
 
         return confidence, (x.int().item(), y.int().item())
+    
+    def reset(self):
+        self.last_result = None
 
     def _evaluate_heatmap_model(self, window) -> Prediction:
         """Evaluate the model on a window of the image.

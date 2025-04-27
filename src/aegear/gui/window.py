@@ -73,7 +73,7 @@ class AegearMainWindow(tk.Tk):
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Initialize the fish tracker.
-        self._tracker = FishTracker(HEATMAP_MODEL_PATH, SIAMESE_MODEL_PATH, tracking_threshold=0.85, detection_threshold=0.85, debug=False)
+        self._tracker = FishTracker(HEATMAP_MODEL_PATH, SIAMESE_MODEL_PATH, tracking_threshold=0.75, detection_threshold=0.80, debug=False, search_stride=0.75)
 
         if initial_video == "":
             # No video selected; show error and exit.
@@ -252,7 +252,7 @@ class AegearMainWindow(tk.Tk):
         self.update_gui()
     
     def update_smooth_trajectory(self):
-        trajectory = np.array([ coordinates for coordinates, _ in self._fish_tracking.values() ])
+        trajectory = np.array([ [t, coordinates[0], coordinates[1]] for t, (coordinates, _) in self._fish_tracking.items() ])
         self._smooth_trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
 
     
@@ -427,6 +427,9 @@ class AegearMainWindow(tk.Tk):
         # Initialize background subtractor for motion detection.
         bck_substractor = cv2.createBackgroundSubtractorKNN(history=100)
 
+        # Clear previous tracking data.
+        self._tracker.reset()
+
         # Warm up background subtractor using preceding frames.
         for frame_id in range(max(track_start_frame - 10, 0), track_start_frame):
             frame_image = self._read_frame(frame_id)
@@ -460,6 +463,7 @@ class AegearMainWindow(tk.Tk):
 
             # Read and process the current frame.
             frame_image = self._read_frame(frame_id)
+
             gframe_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2GRAY)
             gframe_image = cv2.medianBlur(gframe_image, 3)
             background_mask = bck_substractor.apply(gframe_image)
@@ -474,6 +478,7 @@ class AegearMainWindow(tk.Tk):
             frame_image = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
 
             result = self._tracker.track(frame_image, mask=background_mask)
+
             if result is not None:
                 (coordinates, confidence) = result.centroid, result.confidence
                 self.track_bar.mark_processed(frame_id)
@@ -832,7 +837,7 @@ class AegearMainWindow(tk.Tk):
         if self._draw_trajectory.get() and len(self._fish_tracking) > 1:
             travelDistance = trajectory_length(self._smooth_trajectory) * self._pixel_to_cm_ratio
             self.distance_status_bar['text'] = "Distance: {} cm".format(travelDistance)
-            image = draw_trajectory(image, self._smooth_trajectory)
+            image = draw_trajectory(image, self._smooth_trajectory, self._get_current_frame_number())
 
         # Convert image from OpenCV format to PIL, then to Tkinter-compatible image.
         image = Image.fromarray(image)

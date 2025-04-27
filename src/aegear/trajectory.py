@@ -8,6 +8,8 @@ Assumes trajectory is a list of (x, y) pixel coordinates sampled at video frame 
 import cv2
 import numpy as np
 from scipy.signal import savgol_filter
+import bisect
+from typing import List, Tuple
 
 
 def trajectory_length(trajectory: list[tuple[int, int]]) -> float:
@@ -32,90 +34,74 @@ def trajectory_length(trajectory: list[tuple[int, int]]) -> float:
     return sumlength
 
 
-def smooth_trajectory(trajectory: list[tuple[int, int]], filterSize: int = 15) -> list[tuple[int, int]]:
+def smooth_trajectory(trajectory: list[tuple[int, int, int]], filterSize: int = 15) -> list[tuple[int, int]]:
     """
     Apply Savitzky-Golay filter to smooth a trajectory.
 
     Parameters:
-        trajectory (list of (x, y)): Raw trajectory points.
+        trajectory (list of (t, x, y)): Frame id with raw trajectory points.
         filterSize (int): Window size for filtering (must be odd).
 
     Returns:
-        list of (x, y): Smoothed trajectory points.
+        list of (t, x, y): Smoothed trajectory points.
     """
     if len(trajectory) < filterSize:
         return trajectory
 
     trajectory = np.array(trajectory)
-    x = savgol_filter(trajectory[:, 0], filterSize, 3)
-    y = savgol_filter(trajectory[:, 1], filterSize, 3)
+    t = savgol_filter(trajectory[:, 0], filterSize, 3)
+    x = savgol_filter(trajectory[:, 1], filterSize, 3)
+    y = savgol_filter(trajectory[:, 2], filterSize, 3)
 
-    smoothed = list(zip(x.astype(int), y.astype(int)))
+    smoothed = list(zip(t.astype(int), x.astype(int), y.astype(int)))
     return smoothed
 
 def draw_trajectory(
     frame: np.ndarray,
-    trajectory: list[tuple[int, int]],
-    thickness: int = 1,
+    trajectory: List[Tuple[int, int, int]],
+    current_t: int,
     n_seconds: float = 3.0,
+    thickness: int = 1,
+    color: Tuple[int, int, int] = (255, 255, 0),
     fps: float = 60.0
 ) -> np.ndarray:
     """
-    Draw a trajectory onto a video frame, with optional fading over time.
+    Overlay a time-fading trajectory onto a BGR frame.
 
-    The trajectory is clipped to the last `n_seconds` of data. The oldest points
-    fade out linearly, and the newest are fully opaque.
-
-    Parameters:
-        frame (np.ndarray): Input video frame (BGR).
-        trajectory (list of (x, y)): Sequence of 2D points.
-        thickness (int): Line thickness.
-        n_seconds (float): Time window to draw (in seconds).
-        fps (float): Frame rate to interpret the trajectory timing.
-
-    Returns:
-        np.ndarray: Frame with trajectory overlay.
+    A single O(log N) binary search finds the first point still inside the
+    fading window; we then draw at most `window` points (≤ n_seconds·fps),
+    so per-frame complexity is bounded and independent of the full list size.
     """
-    if len(trajectory) < 2:
+    window = int(round(n_seconds * fps))
+    if window <= 0 or len(trajectory) < 2:
         return frame
 
-    max_points = int(n_seconds * fps)
-    trajectory = trajectory[-max_points:]
-    num_points = len(trajectory)
+    t_min = current_t - window
+    # --- binary-search for first point with t_idx >= t_min ------------------
+    # build a helper list of just the time stamps once; cheap even if repeated
+    # but you can keep it outside if you manage the structure yourself
+    time_stamps = [p[0] for p in trajectory]
+    start_idx = bisect.bisect_left(time_stamps, t_min)
 
-    dframe = np.copy(frame)
-    overlay = dframe.copy()
+    # nothing inside window?
+    if start_idx >= len(trajectory) - 1:
+        return frame
 
-    # Precompute colors and alpha values
-    hsv_colors = np.zeros((num_points, 1, 3), dtype=np.uint8)
-    alphas = np.linspace(0.0, 1.0, num_points)
-    for i in range(num_points):
-        hsv_colors[i, 0, 0] = int(150.0 * ((num_points - i) / num_points))  # H
-        hsv_colors[i, 0, 1] = 255  # S
-        hsv_colors[i, 0, 2] = 255  # V
-    rgb_colors = cv2.cvtColor(hsv_colors, cv2.COLOR_HSV2RGB).reshape(num_points, 3)
+    pts_slice = trajectory[start_idx:]          # <= window points
+    out = frame.copy()
 
-    for i in range(1, num_points):
-        prev = trajectory[i - 1]
-        p = trajectory[i]
-        color = tuple(int(c) for c in rgb_colors[i])
-        alpha = alphas[i]
+    for i in range(1, len(pts_slice)):
+        t1, x1, y1 = pts_slice[i - 1]
+        t2, x2, y2 = pts_slice[i]
 
-        # Determine bounding box for the line
-        x1, y1 = prev
-        x2, y2 = p
-        x_min = max(min(x1, x2) - thickness, 0)
-        y_min = max(min(y1, y2) - thickness, 0)
-        x_max = min(max(x1, x2) + thickness, frame.shape[1] - 1)
-        y_max = min(max(y1, y2) + thickness, frame.shape[0] - 1)
+        # use the *newer* point's age for the segment opacity
+        age = current_t - t2
+        if age > window or age < 0:
+            continue
 
-        roi_overlay = overlay[y_min:y_max+1, x_min:x_max+1]
-        roi_temp = roi_overlay.copy()
+        alpha = 1.0 - (age / window)            # linear fade 1 → 0
+        overlay = np.zeros_like(frame, np.uint8)
+        cv2.line(overlay, (x1, y1), (x2, y2), color, thickness, cv2.LINE_AA)
+        cv2.addWeighted(overlay, alpha, out, 1.0, 0.0, dst=out)
 
-        # Draw line in the ROI
-        cv2.line(roi_temp, (x1 - x_min, y1 - y_min), (x2 - x_min, y2 - y_min), color, thickness, cv2.LINE_AA)
-        cv2.addWeighted(roi_temp, alpha, roi_overlay, 1 - alpha, 0, roi_overlay)
-
-        overlay[y_min:y_max+1, x_min:x_max+1] = roi_overlay
-
-    return overlay
+    return out
