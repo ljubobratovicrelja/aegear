@@ -17,13 +17,14 @@ from aegear.calibration import SceneCalibration
 from aegear.trajectory import trajectory_length, smooth_trajectory, draw_trajectory
 from aegear.tracker import FishTracker
 from aegear.gui.tracking_bar import TrackingBar
+from aegear.gui.progress_reporter import ProgressReporter
 from aegear.utils import resource_path
 from aegear.video import VideoClip
 
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
 HEATMAP_MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-04-04.pth")
-SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-04-23.pth")
+SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-05-04.pth")
 
 class AegearMainWindow(tk.Tk):
     """
@@ -56,8 +57,7 @@ class AegearMainWindow(tk.Tk):
         self._pixel_to_cm_ratio = 1.0
         self._first_frame_position = None
         self._fish_tracking = {}
-        self._trajectory_smooth_size = 9
-        self._trajectory_frame_skip = 7
+        self._trajectory_smooth_size = 5
         self._screen_points = []  # Screen points used for calibration.
 
         # Boolean variable to control drawing the trajectory.
@@ -73,8 +73,13 @@ class AegearMainWindow(tk.Tk):
         initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Initialize the fish tracker.
-        self._tracker = FishTracker(HEATMAP_MODEL_PATH, SIAMESE_MODEL_PATH, detection_threshold=0.85, debug=False, search_stride=0.5)
-        self._tracking_threshold = 0.9
+        self._tracker = FishTracker(HEATMAP_MODEL_PATH,
+                                    SIAMESE_MODEL_PATH,
+                                    tracking_threshold=0.85,
+                                    detection_threshold=0.85,
+                                    debug=False,
+                                    search_stride=0.5,
+                                    tracking_max_skip=7)
 
         if initial_video == "":
             # No video selected; show error and exit.
@@ -160,13 +165,13 @@ class AegearMainWindow(tk.Tk):
         self.tracking_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100,
                                                  orient=tk.HORIZONTAL, label="Tracking Threshold",
                                                  command=self._tracking_threshold_changed)
-        self.tracking_threshold_scale.set(int(self._tracking_threshold * 100.0))
+        self.tracking_threshold_scale.set(int(self._tracker.tracking_threshold * 100.0))
         self.tracking_threshold_scale.pack(side=tk.LEFT)
 
         self.detection_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100,
                                                   orient=tk.HORIZONTAL, label="Detection Threshold",
                                                   command=self._detection_threshold_changed)
-        self.detection_threshold_scale.set(int(self._tracker.heatmap_threshold * 100.0))
+        self.detection_threshold_scale.set(int(self._tracker.detection_threshold * 100.0))
         self.detection_threshold_scale.pack(side=tk.LEFT)
 
         self.smooth_trajectory_scale = tk.Scale(self.right_frame, from_=1, to=100,
@@ -178,7 +183,7 @@ class AegearMainWindow(tk.Tk):
         self.tracking_frame_scale = tk.Scale(self.right_frame, from_=1, to=100,
                                              orient=tk.HORIZONTAL, label="Tracking Frame Skip",
                                              command=self._trajectory_frame_skip_changed)
-        self.tracking_frame_scale.set(self._trajectory_frame_skip)
+        self.tracking_frame_scale.set(self._tracker.tracking_max_skip)
         self.tracking_frame_scale.pack(side=tk.LEFT)
 
         self.draw_trajectory_checkbox = tk.Checkbutton(self.right_frame, text="Draw Trajectory",
@@ -366,11 +371,11 @@ class AegearMainWindow(tk.Tk):
 
     def _tracking_threshold_changed(self, value):
         """Update the tracking threshold for the fish tracker."""
-        self._tracking_threshold = float(value) / 100.0
+        self._tracker.tracking_threshold = float(value) / 100.0
 
     def _detection_threshold_changed(self, value):
         """Update the detection threshold for the fish tracker."""
-        self._tracker.heatmap_threshold = float(value) / 100.0
+        self._tracker.detection_threshold = float(value) / 100.0
 
     def _trajectory_smooth_size_changed(self, value):
         """
@@ -388,22 +393,18 @@ class AegearMainWindow(tk.Tk):
 
     def _trajectory_frame_skip_changed(self, value):
         """Update the frame skip value used during tracking."""
-        self._trajectory_frame_skip = int(value)
-
-    def _build_task_window(self) -> tuple[tk.Toplevel, tk.Label, ttk.Progressbar]:
-        """Create a new window for tracking progress."""
-
-        win = tk.Toplevel(self)
-        win.title("Tracking")
-        win.geometry("350x130")
-
-        label = tk.Label(win, text="Progress: 0%")
-        label.pack()
-        bar = ttk.Progressbar(win, length=240)
-        bar.pack(pady=15)
-        tk.Button(win, text="Cancel", command=win.destroy).pack()
-
-        return win, label, bar
+        self._tracker.tracking_max_skip = int(value)
+    
+    def _tracking_model_register(self, frame, centroid, confidence):
+        """Register a tracking model for the current frame."""
+        (x, y) = self._scene_calibration.rectify_point(centroid)
+        self.insert_tracking_point(frame, (int(x), int(y)), confidence)
+    
+    def _tracking_ui_update(self, frame):
+        """Update the UI with the current frame."""
+        self._play_frame(frame)
+        self.update_gui()
+        self.update()
 
     def _run_tracking(self):
         """Run tracking on the selected frames."""
@@ -415,87 +416,19 @@ class AegearMainWindow(tk.Tk):
             messagebox.showerror("Error", "Please set the processing start and end frames.")
             return
 
-        task_win, progress_lbl, progress_bar = self._build_task_window()
-
         start_frame = self.track_bar.processing_start
         end_frame = self.track_bar.processing_end
-        max_skip = max(1, int(self._trajectory_frame_skip))
-        current_skip = max_skip
-        anchor_frame = start_frame
+        progress_reporter = ProgressReporter(self, start_frame, end_frame)
 
-        t0 = time.time()
-        timeline_len = end_frame - start_frame
+        self._tracker.run_tracking(
+            self.clip,
+            start_frame,
+            end_frame,
+            progress_reporter=progress_reporter,
+            model_track_register=self._tracking_model_register,
+            ui_update=self._tracking_ui_update)
 
-        # BGS warm‑up
-        bgs = cv2.createBackgroundSubtractorKNN(history=100)
-        for fid in range(max(start_frame - 10, 0), start_frame):
-            f = self._read_frame(fid)
-            if f is None:
-                continue
-            g = cv2.GaussianBlur(cv2.cvtColor(f, cv2.COLOR_RGB2GRAY), (3, 3), 1.0)
-            bgs.apply(g)
-
-        self._tracker.reset()
-
-        while anchor_frame < end_frame and task_win.winfo_exists():
-            candidate = anchor_frame + current_skip
-            if candidate >= end_frame:
-                break
-
-            # UI: progress / ETA / FPS
-            done = anchor_frame - start_frame
-            pct = (done / max(timeline_len, 1)) * 100.0
-            elapsed = time.time() - t0
-            eta_sec = (elapsed / max(pct, 0.001)) * (100.0 - pct)
-            h, rem = divmod(int(eta_sec), 3600)
-            m, s = divmod(rem, 60)
-            video_fps = (done or 1) / max(elapsed, 1e-6)
-            progress_lbl["text"] = (
-                f"Progress: {pct:5.1f}% | ETA {h:02d}:{m:02d}:{s:02d} | FPS {video_fps:5.1f}")
-            progress_bar["value"] = pct
-            task_win.update_idletasks()
-
-            # Read and pre‑process the candidate.
-            frame = self._read_frame(candidate)
-            g = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY), (3, 3), 1.0)
-            mask = bgs.apply(g)
-            k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k)
-            _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
-
-            result = self._tracker.track(frame, mask=mask)
-
-            good = result is not None and result.confidence >= self._tracking_threshold
-
-            draw = frame.copy()
-            if good:
-                cv2.circle(draw, result.centroid, 5, (255, 0, 0), -1)
-                self.insert_tracking_point(candidate, result.centroid, result.confidence)
-
-                self.track_bar.mark_processed(candidate)
-                self.update_frame(candidate, draw)
-                self.update()
-
-                anchor_frame = candidate
-                if current_skip < max_skip:
-                    current_skip = min(current_skip * 2, max_skip)
-            else:
-                if current_skip > 1:
-                    current_skip = max(current_skip // 2, 1)
-                    continue
-
-                self.track_bar.mark_processed(candidate)
-                self.update_frame(candidate, draw)
-                self.update()
-
-                anchor_frame = candidate
-
-        # UI cleanup
-        if task_win.winfo_exists():
-            task_win.grab_set()
-            task_win.destroy()
-
-        self._play_frame(start_frame)
+        progress_reporter.close()
 
     def _set_track_start(self):
         """Set the current slider position as the start of processing."""

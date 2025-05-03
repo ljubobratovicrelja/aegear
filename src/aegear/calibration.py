@@ -141,3 +141,35 @@ class SceneCalibration:
         ret_image = cv2.warpPerspective(ret_image, self._perspectiveTransform, image.shape[0:2][::-1])
 
         return ret_image
+
+    def rectify_point(self, point: tuple[float, float]) -> tuple[float, float]:
+        """
+        Rectify a single point using the current calibration.
+
+        Parameters
+        ----------
+        point : tuple of float
+            The (x, y) coordinates of the point to rectify.
+
+        Returns
+        -------
+        tuple of float
+            The rectified (x, y) coordinates.
+        """
+        assert self._perspectiveTransform is not None, "Need to calibrate first"
+
+        # Step 1: Undistort
+        undistorted_pt = cv2.undistortPoints(
+            np.array([[point]], dtype=np.float32),
+            self.mtx,
+            self.dist,
+            P=self.mtx
+        )[0, 0]
+
+        # Step 2: Perspective transform
+        rectified_pt = cv2.perspectiveTransform(
+            np.array([[undistorted_pt]], dtype=np.float32),
+            self._perspectiveTransform
+        )[0, 0]
+
+        return tuple(rectified_pt)

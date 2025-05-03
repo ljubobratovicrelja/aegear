@@ -8,11 +8,13 @@ import torchvision.transforms as transforms
 from torch.nn.functional import interpolate
 
 from aegear.model import EfficientUNet, SiameseTracker
+from aegear.video import VideoClip
+from aegear.gui.progress_reporter import ProgressReporter
 
 
 class Prediction:
     """A class to represent a prediction made by the model."""
-    def __init__(self, confidence, centroid):
+    def __init__(self, confidence, centroid, roi=None):
         """Initialize the prediction.
 
         Parameters
@@ -22,10 +24,13 @@ class Prediction:
             The confidence of the prediction.
         centroid : tuple
             The centroid of the prediction.
+        roi : np.ndarray
+            The region of interest of the prediction.
         """
 
         self.centroid = centroid
         self.confidence = confidence
+        self.roi = roi
     
     def global_coordinates(self, origin):
         x, y = origin
@@ -36,10 +41,11 @@ class Prediction:
         return Prediction(
             confidence,
             (centroid[0] + x,centroid[1] + y),
+            self.roi,
         )
 
 class Kalman2D:
-    def __init__(self, r=2.5, q=0.1):
+    def __init__(self, r=1.0, q=0.1):
         """Initialize the Kalman filter.
         
         Parameters
@@ -87,18 +93,16 @@ class FishTracker:
 
     # Original window size for the training data.
     WINDOW_SIZE = 129
-    # Number of max missed frames before we reset the last position.
-    MAX_MISSED_FRAMES = 10
     # The size of the tracking window.
     TRACKER_WINDOW_SIZE = 129
-    # The size of the trajectory prediction window.
-    MAX_HISTORY_SIZE = 10
 
     def __init__(self,
                  heatmap_model_path,
                  siamese_model_path,
-                 detection_threshold=0.95,
+                 tracking_threshold=0.9,
+                 detection_threshold=0.85,
                  search_stride=0.5,
+                 tracking_max_skip=10,
                  debug=False):
 
         self._debug = debug
@@ -107,12 +111,58 @@ class FishTracker:
         self._transform = FishTracker._init_transform()
         self.heatmap_model = self._init_heatmap_model(heatmap_model_path)
         self.siamese_model = self._init_siamese_model(siamese_model_path)
-        self.heatmap_threshold = detection_threshold
+        self.tracking_threshold = tracking_threshold
+        self.detection_threshold = detection_threshold
+        self.tracking_max_skip = tracking_max_skip
+
         self.last_result = None
         self.history = []
         self.frame_size = None
         self.kalman = Kalman2D()
     
+    def run_tracking(self, video: VideoClip, start_frame: int, end_frame: int, progress_reporter: ProgressReporter, model_track_register, ui_update):
+        """Run the tracking on a video."""
+      
+        bgs = self._init_background_subtractor(video, start_frame)
+        current_skip = self.tracking_max_skip
+        anchor_frame = start_frame
+
+        self.last_result = None
+
+        while anchor_frame < end_frame and progress_reporter.still_running():
+            candidate = anchor_frame + current_skip
+            if candidate >= end_frame:
+                break
+
+            print(f"Current skip: {current_skip}")
+
+            # Read and pre‑process the candidate.
+            frame = video.get_frame(float(candidate) / video.fps)
+            if frame is None:
+                break
+
+            result = self._track_frame(frame, mask=self._motion_detection(bgs, frame))
+
+            if result is not None:
+                # Store this result for further tracking.
+                self.last_result = result
+                model_track_register(candidate, result.centroid, result.confidence)
+
+                anchor_frame = candidate
+                progress_reporter.update(anchor_frame)
+
+                if current_skip < self.tracking_max_skip:
+                    current_skip = min(current_skip * 2, self.tracking_max_skip)
+            else:
+                if self.last_result is not None and current_skip > 1:
+                    current_skip = max(current_skip // 2, 1)
+                    continue
+
+                anchor_frame = candidate
+                self.last_result = None
+
+            ui_update(anchor_frame)
+
     def _select_device():
         """Select the device - try CUDA, if fails, try mps for Apple Silicon, else CPU."""
         if torch.cuda.is_available():
@@ -153,11 +203,26 @@ class FishTracker:
         model.eval()
         return model
     
-    def track(self, frame, mask=None):
+    def _track_frame(self, frame, mask=None):
+        """Track the fish in the given frame.
+        
+        Parameters
+        ----------
+        
+        frame : np.ndarray
+            The frame to track the fish in.
+        mask : np.ndarray, optional
+            The mask to use for tracking. If None, the whole frame is used.
+
+        Returns
+        -------
+
+        Prediction or None
+            The prediction made by the model, or None if no fish is detected.
+        """
         if self.frame_size is None:
             self.frame_size = frame.shape[:2]
 
-        confidence = 0.0
         self._debug_print("track")
 
         if self.last_result is None:
@@ -166,51 +231,82 @@ class FishTracker:
             result = self._sliding_window_predict(frame, mask)
 
             if result is not None:
-                prediction, roi = result
+                prediction = result
+
+                prediction.roi = self._tracking_roi(frame, prediction.centroid)[1]
+
                 self.kalman.reset(prediction.centroid[0], prediction.centroid[1])
-                self.last_result = (prediction, roi)
 
                 return prediction
         else:
             self._debug_print("tracking")
             # Try getting a ROI around the last position.
-            prediction, last_roi = self.last_result
-            x, y = prediction.centroid
-
-            h, w = frame.shape[:2]
-
-            w_t = self.TRACKER_WINDOW_SIZE // 2
-
-            # Clamp center so that full ROI fits in frame
-            x = max(w_t, min(x, w - w_t))
-            y = max(w_t, min(y, h - w_t))
-
-            x1 = int(x - w_t)
-            y1 = int(y - w_t)
-            x2 = int(x + w_t)
-            y2 = int(y + w_t)
-
-            current_roi = frame[y1:y2, x1:x2]
-            result = self._evaluate_siamese_model(last_roi, current_roi)
+            (x1, y1), current_roi = self._tracking_roi(frame, self.last_result.centroid)
+            result = self._evaluate_siamese_model(self.last_result.roi, current_roi)
 
             if result is not None:
-                self.last_result = (result.global_coordinates((x1, y1)), current_roi)
-
                 prediction = result.global_coordinates((x1, y1))
+
                 x, y = self.kalman.update(prediction.centroid)
                 prediction.centroid = (int(x), int(y))
+
+                prediction.roi = self._tracking_roi(frame, prediction.centroid)[1]
 
                 self._debug_print(f"Found fish at ({result.centroid}) with confidence {result.confidence}")
 
                 return prediction
 
-        self.last_result = None
-        self._debug_print("No fish found")
-
         return None
+    
+    def _tracking_roi(self, frame, centroid):
+        """Get the tracking ROI around the centroid."""
+        x, y = centroid
+        h, w = frame.shape[:2]
+        w_t = self.TRACKER_WINDOW_SIZE // 2
 
+        # Clamp center so that full ROI fits in frame
+        x = max(w_t, min(x, w - w_t))
+        y = max(w_t, min(y, h - w_t))
 
-    def _sliding_window_predict(self, frame, mask=None) -> Optional[Tuple[Prediction, np.array]]:
+        x1 = int(x - w_t)
+        y1 = int(y - w_t)
+        x2 = int(x + w_t)
+        y2 = int(y + w_t)
+
+        return (x1, y1), frame[y1:y2, x1:x2]
+    
+    def _init_background_subtractor(self, video: VideoClip, start_frame: int, history=50, dist2threshold=500, warmup=20):
+        """Initialize the background subtractor."""
+        background_subtractor = cv2.createBackgroundSubtractorKNN(history=history, dist2Threshold=dist2threshold, detectShadows=False)
+
+        # Warm up the background subtractor with a few frames.
+        for fid in range(max(start_frame - warmup, 0), start_frame):
+            t = float(fid) / video.fps
+            f = video.get_frame(t)
+            if f is None:
+                continue
+
+            gframe = cv2.cvtColor(f, cv2.COLOR_RGB2GRAY)
+            gframe = cv2.GaussianBlur(gframe, (5, 5), 1.0)
+
+            background_subtractor.apply(gframe, learningRate=0.25)
+        
+        return background_subtractor
+    
+    def _motion_detection(self, bgs, frame):
+        """Detect motion in the frame using the background subtractor."""
+
+        gframe = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+        gframe = cv2.GaussianBlur(gframe, (5, 5), 1.0)
+
+        mask = bgs.apply(gframe, learningRate=0.125)
+
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k)
+
+        return mask
+
+    def _sliding_window_predict(self, frame, mask=None) -> Optional[Prediction]:
         """
         Do a sliding window over the whole frame to try and find our fish.
 
@@ -258,20 +354,26 @@ class FishTracker:
                 if not result:
                     continue
 
-                self._debug_print(f"Best result at ({x}, {y}) with score {result.confidence}")
-
                 # Map out the global coordinates of the predictions.
-                global_result = result.global_coordinates((x, y))
-
-                results.append((global_result, window))
+                results.append(result.global_coordinates((x, y)))
         
         if results:
             self._debug_print(f"Got {len(results)} results")
 
             # Sort by score
-            results.sort(key=lambda x: x[0].confidence, reverse=True)
+            results.sort(key=lambda x: x.confidence, reverse=True)
 
-            return results[-1]  # Return the best result
+            # Get the best result
+            result = results[0]
+        
+            if result.confidence < self.detection_threshold:
+
+                self._debug_print(f"Best candidate confidence {result.confidence} is below threshold {self.detection_threshold}")
+                return None
+
+            return result  # Return the best result
+
+        self._debug_print(f"Not a single sliding window found a fish")
 
         return None
 
@@ -289,9 +391,6 @@ class FishTracker:
 
         return confidence, (x.int().item(), y.int().item())
     
-    def reset(self):
-        self.last_result = None
-
     def _evaluate_heatmap_model(self, window) -> Prediction:
         """Evaluate the model on a window of the image.
         Note that this returns the prediction in window local space. For global space
@@ -320,11 +419,6 @@ class FishTracker:
             return None
         
         (confidence, centroid) = result
-
-        
-        if confidence < self.heatmap_threshold:
-            self._debug_print(f"Heatmap: Confidence {confidence} is below threshold {self.heatmap_threshold}")
-            return None
         
         return Prediction(confidence, centroid)
     
@@ -356,8 +450,13 @@ class FishTracker:
             return None
         
         (confidence, centroid) = result
+
+        if  confidence < self.tracking_threshold:
+            self._debug_print(f"Siamese: Confidence {confidence} is below threshold {self.tracking_threshold}")
+            return None
         
-        return Prediction(confidence, centroid)
+        # Note that for siamese we don't store the roi, because we afterwards do kalman filtering.
+        return Prediction(confidence, centroid, roi=None)
 
 
     def _debug_print(self, msg):
