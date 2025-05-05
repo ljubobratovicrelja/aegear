@@ -173,6 +173,7 @@ class TrackingDataset(Dataset):
 
     _CROP_SIZE = 129 # Size of the square ROI to extract around centroid
     _OUTPUT_SIZE = 28 # Size of the heatmap output
+    _MAX_NEGATIVE_OFFSET = 50 # Maximum offset for negative samples
 
     def __init__(
         self,
@@ -180,9 +181,12 @@ class TrackingDataset(Dataset):
         video_dir="",
         future_frame_seek=[1, 3, 5, 7],
         interpolation_smoothness=0.5,
+        temporal_jitter_range=0,
         augmentation_transform=None,
         rotation_range=None,
-        scale_range=None
+        scale_range=None,
+        negative_sample_prob=0.0,
+        centroid_perturbation_range=0.0,
     ):
         with open(tracking_json_path, 'r') as f:
             data = json.load(f, object_pairs_hook=OrderedDict)
@@ -193,6 +197,9 @@ class TrackingDataset(Dataset):
         self.future_frame_seek = future_frame_seek
         self.rotation_range = rotation_range
         self.scale_range = scale_range
+        self.negative_sample_prob = negative_sample_prob
+        self.centroid_perturbation_range = centroid_perturbation_range
+        self.temporal_jitter_range = temporal_jitter_range
 
         # Estimate FPS from video file
         self.video = cv2.VideoCapture(self.video_path)
@@ -343,7 +350,7 @@ class TrackingDataset(Dataset):
         return heatmap
 
     def __len__(self):
-        max_future_seek = max(self.future_frame_seek)
+        max_future_seek = max(self.future_frame_seek) + self.temporal_jitter_range
         last_frame = self.tracking[-1]["frame_id"]
         num_margin_frames = 0
 
@@ -372,6 +379,11 @@ class TrackingDataset(Dataset):
         frame_jump = random.choice(self.future_frame_seek)
 
         template_frame_id = template_tracking["frame_id"]
+
+        if self.temporal_jitter_range > 0:
+            jitter = random.randint(-self.temporal_jitter_range, self.temporal_jitter_range)
+            template_frame_id += jitter
+
         search_frame_id = template_frame_id + frame_jump
 
         template_smooth_id = template_frame_id - self.min_frame
@@ -379,6 +391,25 @@ class TrackingDataset(Dataset):
 
         template_coordinate = self.smooth_trajectory[template_smooth_id]
         search_coordinate = self.smooth_trajectory[search_smooth_id]
+
+        if self.centroid_perturbation_range > 0.0:
+            perturbation_x = np.random.uniform(-self.centroid_perturbation_range, self.centroid_perturbation_range)
+            perturbation_y = np.random.uniform(-self.centroid_perturbation_range, self.centroid_perturbation_range)
+            template_coordinate = (template_coordinate[0] + perturbation_x, template_coordinate[1] + perturbation_y)
+                   
+        is_negative = random.random() < self.negative_sample_prob
+
+        if is_negative:
+            offset_x = random.choice([-1, 1]) * random.randint(TrackingDataset._MAX_NEGATIVE_OFFSET // 2, TrackingDataset._MAX_NEGATIVE_OFFSET)
+            offset_y = random.choice([-1, 1]) * random.randint(TrackingDataset._MAX_NEGATIVE_OFFSET // 2, TrackingDataset._MAX_NEGATIVE_OFFSET)
+
+            template_coordinate = (
+                search_coordinate[0] + offset_x,
+                search_coordinate[1] + offset_y
+            )
+
+            max_frame_seek = max(self.future_frame_seek)
+            search_frame_id = search_smooth_id + random.randint(-max_frame_seek, max_frame_seek)
 
         try:
             template = self._get_crop(template_frame_id, template_coordinate, transform)
@@ -401,13 +432,12 @@ class TrackingDataset(Dataset):
         template = self.normalize(template)
         search = self.normalize(search)
 
-        #heatmap_scale_diff = self._OUTPUT_SIZE / self._CROP_SIZE
-        #search_roi_hit = (search_coordinate - template_coordinate) * heatmap_scale_diff + self._OUTPUT_SIZE // 2
-
-        offset = np.array(search_coordinate) - np.array(template_coordinate)
-        search_roi_hit = TrackingDataset.transform_offset_for_heatmap(offset, transform, self._CROP_SIZE, self._OUTPUT_SIZE)
-
-        heatmap = TrackingDataset.generate_gaussian_heatmap(search_roi_hit, sigma=2.0).unsqueeze(0)
+        if is_negative:
+            heatmap = torch.zeros((1, self._OUTPUT_SIZE, self._OUTPUT_SIZE))
+        else:
+            offset = np.array(search_coordinate) - np.array(template_coordinate)
+            search_roi_hit = TrackingDataset.transform_offset_for_heatmap(offset, transform, self._CROP_SIZE, self._OUTPUT_SIZE)
+            heatmap = TrackingDataset.generate_gaussian_heatmap(search_roi_hit, sigma=2.0).unsqueeze(0)
 
         return (
             template, search, heatmap
