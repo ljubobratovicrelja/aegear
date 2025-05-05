@@ -73,7 +73,7 @@ class SiameseTracker(nn.Module):
     Siamese tracker using EfficientNet-B0 encoder features shared with a pretrained EfficientUNet.
     Outputs a high-resolution response map for localization via conv head and upsampling blocks.
     """
-    def __init__(self, unet=EfficientUNet(), head_type="conv"):
+    def __init__(self, unet=EfficientUNet()):
         super().__init__()
 
         # Reuse trained encoder from existing EfficientUNet instance
@@ -85,37 +85,38 @@ class SiameseTracker(nn.Module):
             unet.enc5,
         )
 
-        self.head_type = head_type
-        if head_type == "conv":
-            self.head = nn.Sequential(
-                nn.Conv2d(1280 * 2, 256, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(256, 128, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(128, 32, kernel_size=2, stride=2),  # 7x7 -> 14x14
-                nn.ReLU(inplace=True),
-                nn.ConvTranspose2d(32, 1, kernel_size=2, stride=2),   # 14x14 -> 28x28
-            )
+        # Convolutional head for response map generation.
+        self.head = nn.Sequential(
+            nn.Conv2d(1280 * 2, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(256, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=4),
+            nn.ReLU(inplace=True),
+
+            nn.Conv2d(16, 1, kernel_size=3, padding=1)
+        )
 
     def forward(self, template, search):
         """
         template: (B, C, H, W)
         search:   (B, C, H, W)
-        returns:  (B, 1, H_out, W_out) response map (e.g., 224x224)
+        returns:  (B, 1, 28, 28) response map.
         """
-        feat_t = self.encoder(template)  # (B, 1280, h, w)
-        feat_s = self.encoder(search)    # (B, 1280, h, w)
+        feat_t = self.encoder(template)
+        feat_s = self.encoder(search)
 
-        if self.head_type == "conv":
-            x = torch.cat([feat_t, feat_s], dim=1)
-            out = self.head(x)
-        else:  # naive cross-correlation (legacy, unused)
-            B, C, H, W = feat_t.shape
-            out = torch.zeros(B, 1, H, W, device=feat_t.device)
-            for i in range(B):
-                out[i, 0] = F.conv2d(feat_s[i:i+1], feat_t[i:i+1], padding=0).squeeze(0)
+        x = torch.cat([feat_t, feat_s], dim=1)
+        return self.head(x)
 
-        return out
 
 class ConvClassifier(nn.Module):
     """
