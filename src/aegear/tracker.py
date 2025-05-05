@@ -134,8 +134,6 @@ class FishTracker:
             if candidate >= end_frame:
                 break
 
-            print(f"Current skip: {current_skip}")
-
             # Read and pre‑process the candidate.
             frame = video.get_frame(float(candidate) / video.fps)
             if frame is None:
