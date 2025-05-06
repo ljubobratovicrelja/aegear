@@ -71,7 +71,7 @@ class EfficientUNet(nn.Module):
 class SiameseTracker(nn.Module):
     """
     Siamese tracker using EfficientNet-B0 encoder features shared with a pretrained EfficientUNet.
-    Outputs a high-resolution response map for localization via conv head and upsampling blocks.
+    Outputs a high-resolution response map using residual blocks and upsampling.
     """
     def __init__(self, unet=EfficientUNet()):
         super().__init__()
@@ -81,41 +81,60 @@ class SiameseTracker(nn.Module):
             unet.enc1,
             unet.enc2,
             unet.enc3,
-            unet.enc4,
-            unet.enc5,
         )
 
-        # Convolutional head for response map generation.
-        self.head = nn.Sequential(
-            nn.Conv2d(1280 * 2, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
+        # Feature normalization layer
+        self.normalize = nn.GroupNorm(num_groups=8, num_channels=128)
 
-            nn.Conv2d(256, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
+        # Initial reduction layer
+        self.initial = nn.Sequential(
+            nn.Conv2d(80, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True)
+        )
 
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+        self.resblock1 = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        )
 
-            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+        self.resblock2 = nn.Sequential(
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        )
 
-            nn.ConvTranspose2d(32, 16, kernel_size=4, stride=4),
+        # Upsampling head
+        self.upsample = nn.Sequential(
+            nn.ConvTranspose2d(128, 32, kernel_size=4, stride=2),  # 28x28 -> 58x58
             nn.ReLU(inplace=True),
-
-            nn.Conv2d(16, 1, kernel_size=3, padding=1)
+            nn.Conv2d(32, 1, kernel_size=3, padding=1)
         )
 
     def forward(self, template, search):
         """
         template: (B, C, H, W)
         search:   (B, C, H, W)
-        returns:  (B, 1, 28, 28) response map.
+        returns:  (B, 1, 58, 58) response map.
         """
         feat_t = self.encoder(template)
         feat_s = self.encoder(search)
 
+        feat_t = F.normalize(feat_t, p=2, dim=1)
+        feat_s = F.normalize(feat_s, p=2, dim=1)
+
         x = torch.cat([feat_t, feat_s], dim=1)
-        return self.head(x)
+
+        x = self.initial(x)
+        x = self.normalize(x)
+
+        res = self.resblock1(x)
+        x = x + res
+        res = self.resblock2(x)
+        x = x + res
+
+        return self.upsample(x)
+
 
 
 class ConvClassifier(nn.Module):

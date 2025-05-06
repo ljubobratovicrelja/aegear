@@ -233,7 +233,7 @@ class FishTracker:
 
                 prediction.roi = self._tracking_roi(frame, prediction.centroid)[1]
 
-                self.kalman.reset(prediction.centroid[0], prediction.centroid[1])
+                #self.kalman.reset(prediction.centroid[0], prediction.centroid[1])
 
                 return prediction
         else:
@@ -245,8 +245,8 @@ class FishTracker:
             if result is not None:
                 prediction = result.global_coordinates((x1, y1))
 
-                x, y = self.kalman.update(prediction.centroid)
-                prediction.centroid = (int(x), int(y))
+                #x, y = self.kalman.update(prediction.centroid)
+                #prediction.centroid = (int(x), int(y))
 
                 prediction.roi = self._tracking_roi(frame, prediction.centroid)[1]
 

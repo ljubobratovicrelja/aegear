@@ -10,7 +10,6 @@ from PIL import Image, ImageTk
 import tkinter as tk
 import tkinter.messagebox as messagebox
 import tkinter.filedialog as filedialog
-from tkinter import ttk
 
 # Internal modules
 from aegear.calibration import SceneCalibration
@@ -24,7 +23,8 @@ from aegear.video import VideoClip
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
 HEATMAP_MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-04-04.pth")
-SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-05-04.pth")
+#SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-05-04.pth")
+SIAMESE_MODEL_PATH = resource_path("data/models//siamese/best_model.pth")
 
 class AegearMainWindow(tk.Tk):
     """

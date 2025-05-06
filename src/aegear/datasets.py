@@ -171,8 +171,8 @@ class RandomPoissonNoise(torch.nn.Module):
 
 class TrackingDataset(Dataset):
 
-    _CROP_SIZE = 129 # Size of the square ROI to extract around centroid
-    _OUTPUT_SIZE = 28 # Size of the heatmap output
+    _CROP_SIZE = 96 # Size of the square ROI to extract around centroid
+    _OUTPUT_SIZE = 58 # Size of the heatmap output
     _MAX_NEGATIVE_OFFSET = 50 # Maximum offset for negative samples
 
     def __init__(
@@ -437,7 +437,7 @@ class TrackingDataset(Dataset):
         else:
             offset = np.array(search_coordinate) - np.array(template_coordinate)
             search_roi_hit = TrackingDataset.transform_offset_for_heatmap(offset, transform, self._CROP_SIZE, self._OUTPUT_SIZE)
-            heatmap = TrackingDataset.generate_gaussian_heatmap(search_roi_hit, sigma=2.0).unsqueeze(0)
+            heatmap = TrackingDataset.generate_gaussian_heatmap(search_roi_hit, sigma=6.0).unsqueeze(0)
 
         return (
             template, search, heatmap
