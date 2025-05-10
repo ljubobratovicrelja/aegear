@@ -83,40 +83,42 @@ class SiameseTracker(nn.Module):
             unet.enc3,
         )
 
+        HEAD_WIDTH = 256
+
         # Feature normalization layer
-        self.normalize = nn.GroupNorm(num_groups=8, num_channels=128)
+        self.normalize = nn.GroupNorm(num_groups=16, num_channels=HEAD_WIDTH)
 
         # Initial reduction layer
         self.initial = nn.Sequential(
-            nn.Conv2d(80, 128, kernel_size=3, padding=1),
+            nn.Conv2d(80, HEAD_WIDTH, kernel_size=3, padding=1),
             nn.ReLU(inplace=True)
         )
 
         self.resblock1 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1)
+            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1)
         )
 
         self.resblock2 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1)
+            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1)
         )
 
-        # Upsampling head
-        self.upsample = nn.Sequential(
-            nn.ConvTranspose2d(128, 32, kernel_size=4, stride=2),  # 28x28 -> 58x58
+        self.resblock3 = nn.Sequential(  # New extra block
+            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 1, kernel_size=3, padding=1)
+            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1)
+        )
+
+        self.upsample = nn.Sequential(
+            nn.ConvTranspose2d(HEAD_WIDTH, 64, kernel_size=4, stride=2),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 1, kernel_size=3, padding=1)
         )
 
     def forward(self, template, search):
-        """
-        template: (B, C, H, W)
-        search:   (B, C, H, W)
-        returns:  (B, 1, 58, 58) response map.
-        """
         feat_t = self.encoder(template)
         feat_s = self.encoder(search)
 
@@ -130,7 +132,11 @@ class SiameseTracker(nn.Module):
 
         res = self.resblock1(x)
         x = x + res
+
         res = self.resblock2(x)
+        x = x + res
+
+        res = self.resblock3(x)
         x = x + res
 
         return self.upsample(x)

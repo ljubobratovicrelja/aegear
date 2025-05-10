@@ -13,8 +13,7 @@ from scipy.interpolate import Rbf
 from PIL import Image
 
 import torch
-from torch.utils.data import Dataset
-import torch.nn.functional as F
+from torch.utils.data import Dataset, ConcatDataset
 
 import torchvision.transforms as transforms
 
@@ -177,9 +176,10 @@ class TrackingDataset(Dataset):
 
     def __init__(
         self,
-        tracking_json_path,
+        tracking_data,
         video_dir="",
         future_frame_seek=[1, 3, 5, 7],
+        random_pick_future_seek=False,
         interpolation_smoothness=0.5,
         temporal_jitter_range=0,
         augmentation_transform=None,
@@ -188,13 +188,12 @@ class TrackingDataset(Dataset):
         negative_sample_prob=0.0,
         centroid_perturbation_range=0.0,
     ):
-        with open(tracking_json_path, 'r') as f:
-            data = json.load(f, object_pairs_hook=OrderedDict)
 
-        self.video_path = os.path.join(video_dir, data["video"])
-        self.tracking = sorted(data["tracking"], key=lambda x: x["frame_id"])
+        self.video_path = os.path.join(video_dir, tracking_data["video"])
+        self.tracking = sorted(tracking_data["tracking"], key=lambda x: x["frame_id"])
         self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(interpolation_smoothness)
         self.future_frame_seek = future_frame_seek
+        self.random_pick_future_seek = random_pick_future_seek
         self.rotation_range = rotation_range
         self.scale_range = scale_range
         self.negative_sample_prob = negative_sample_prob
@@ -223,6 +222,73 @@ class TrackingDataset(Dataset):
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225]
             )
+    
+    @staticmethod
+    def build_split_datasets(json_filepaths, video_dir, train_fraction=0.9,
+                         future_frame_seek=[1, 3, 5, 7], interpolation_smoothness=0.5,
+                         augmentation_transforms=None, rotation_range=None, scale_range=None, negative_sample_prob=0.0):
+
+        train_datasets = []
+        val_datasets = []
+
+        for path in json_filepaths:
+            with open(path, 'r') as f:
+                data = json.load(f)
+
+            full_tracking = data['tracking']
+            video = data['video']
+
+            # Shuffle and split indices
+            indices = list(range(len(full_tracking)))
+            random.shuffle(indices)
+
+            split_idx = int(len(indices) * train_fraction)
+            train_idx = indices[:split_idx]
+            val_idx = indices[split_idx:]
+
+            # Subsets of tracking samples
+            train_tracking = [full_tracking[i] for i in train_idx]
+            val_tracking = [full_tracking[i] for i in val_idx]
+
+            train_data = {
+                "video": video,
+                "tracking": train_tracking
+            }
+
+            val_data = {
+                "video": video,
+                "tracking": val_tracking
+            }
+
+            # Build train dataset
+            train_dataset = TrackingDataset(
+                tracking_data=train_data,
+                video_dir=video_dir,
+                future_frame_seek=future_frame_seek,
+                random_pick_future_seek=True,
+                interpolation_smoothness=interpolation_smoothness,
+                rotation_range=rotation_range,
+                scale_range=scale_range,
+                negative_sample_prob=negative_sample_prob,
+                augmentation_transform=augmentation_transforms
+            )
+            train_datasets.append(train_dataset)
+
+            # Build val dataset
+            val_dataset = TrackingDataset(
+                tracking_data=val_data,
+                video_dir=video_dir,
+                future_frame_seek=future_frame_seek,
+                random_pick_future_seek=False,
+                interpolation_smoothness=interpolation_smoothness
+            )
+            val_datasets.append(val_dataset)
+
+        # Concat across all videos
+        final_train_dataset = ConcatDataset(train_datasets)
+        final_val_dataset = ConcatDataset(val_datasets)
+
+        return final_train_dataset, final_val_dataset
 
     def _interpolate_tracking(self, interpolation_smoothness):
         frame_ids = np.array([pt["frame_id"] for pt in self.tracking])
@@ -359,14 +425,26 @@ class TrackingDataset(Dataset):
             if self.tracking[i]["frame_id"] + max_future_seek < last_frame:
                 break
 
-        return len(self.tracking) - num_margin_frames - 1
+        num_samples = len(self.tracking) - num_margin_frames - 1
+
+        if not self.random_pick_future_seek:
+            num_samples *= len(self.future_frame_seek)
+
+        return num_samples
 
     def __del__(self):
         if self.video.isOpened():
             self.video.release()
 
     def __getitem__(self, idx):
-        template_tracking = self.tracking[idx]
+        if self.random_pick_future_seek:
+            # Reset seed with  time for max randomness
+            frame_jump = random.choice(self.future_frame_seek)
+            template_tracking = self.tracking[idx]
+        else:
+            # use modulo to cycle through future_frame_seek
+            frame_jump = self.future_frame_seek[idx % len(self.future_frame_seek)]
+            template_tracking = self.tracking[idx // len(self.future_frame_seek)]
 
         if self.rotation_range or self.scale_range:
             rotation_deg = np.random.uniform(-self.rotation_range, self.rotation_range) if self.rotation_range else 0.0
@@ -375,8 +453,7 @@ class TrackingDataset(Dataset):
         else:
             transform = None
 
-        # Reset seed with  time for max randomness
-        frame_jump = random.choice(self.future_frame_seek)
+
 
         template_frame_id = template_tracking["frame_id"]
 
