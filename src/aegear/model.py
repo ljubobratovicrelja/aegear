@@ -65,7 +65,9 @@ class EfficientUNet(nn.Module):
         d1 = self.up1(d2) + x1
         d0 = self.up0(d1)
 
-        return self.out(d0), d0
+        out = self.out(d0)
+        out = F.interpolate(out, size=x.shape[2:], mode='bilinear', align_corners=False)
+        return out, d0
 
 
 class SiameseTracker(nn.Module):
