@@ -28,10 +28,8 @@ class EfficientUNet(nn.Module):
         self.enc2 = nn.Sequential(*features[2:3])
         self.enc3 = nn.Sequential(*features[3:4])
         self.enc4 = nn.Sequential(*features[4:6])
-        self.enc5 = nn.Sequential(*features[6:])
 
         # Decoder blocks (in_channels = encoder out, out_channels = skip connection in)
-        self.up4 = self._up_block(1280, 112)
         self.up3 = self._up_block(112, 40)
         self.up2 = self._up_block(40, 24)
         self.up1 = self._up_block(24, 16)
@@ -42,11 +40,15 @@ class EfficientUNet(nn.Module):
 
     def _up_block(self, in_ch, out_ch):
         return nn.Sequential(
-            nn.ConvTranspose2d(in_ch, out_ch, kernel_size=2, stride=2),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_ch),
             nn.ReLU(inplace=True),
         )
+
 
     def forward(self, x):
         return self.forward_with_decoded(x)[0]
@@ -57,15 +59,14 @@ class EfficientUNet(nn.Module):
         x2 = self.enc2(x1)
         x3 = self.enc3(x2)
         x4 = self.enc4(x3)
-        x5 = self.enc5(x4)
 
-        d4 = self.up4(x5) + x4
-        d3 = self.up3(d4) + x3
+        d3 = self.up3(x4) + x3
         d2 = self.up2(d3) + x2
         d1 = self.up1(d2) + x1
         d0 = self.up0(d1)
 
         out = self.out(d0)
+
         out = F.interpolate(out, size=x.shape[2:], mode='bilinear', align_corners=False)
         return out, d0
 
