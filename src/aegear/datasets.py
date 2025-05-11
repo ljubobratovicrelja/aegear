@@ -452,13 +452,13 @@ class DetectionDataset(Dataset):
 class TrackingDataset(Dataset):
 
     _MAX_NEGATIVE_OFFSET = 50 # Maximum offset for negative samples
+    _OUTPUT_SIZE = 128
+    _CROP_SIZE = 168
 
     def __init__(
         self,
         tracking_data,
         video_dir="",
-        output_size=58,
-        crop_size=96,
         future_frame_seek=[1, 3, 5, 7],
         random_pick_future_seek=False,
         interpolation_smoothness=0.5,
@@ -473,8 +473,6 @@ class TrackingDataset(Dataset):
 
         self.video_path = os.path.join(video_dir, tracking_data["video"])
         self.tracking = sorted(tracking_data["tracking"], key=lambda x: x["frame_id"])
-        self.output_size = output_size
-        self.crop_size = crop_size
         self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(interpolation_smoothness)
         self.future_frame_seek = future_frame_seek
         self.random_pick_future_seek = random_pick_future_seek
@@ -495,12 +493,6 @@ class TrackingDataset(Dataset):
         self.frame_height = int(self.video.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.resolution = np.array([self.frame_width, self.frame_height])
 
-        self.tensor_transforms = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-        ])
-
         self.augmentation_transform = augmentation_transform
 
         self.normalize = transforms.Normalize(
@@ -509,7 +501,7 @@ class TrackingDataset(Dataset):
             )
     
     @staticmethod
-    def build_split_datasets(json_filepaths, video_dir, output_size=58, crop_size=96, train_fraction=0.9,
+    def build_split_datasets(json_filepaths, video_dir, train_fraction=0.9,
                          future_frame_seek=[1, 3, 5, 7], interpolation_smoothness=0.5, gaussian_sigma=6.0,
                          augmentation_transforms=None, rotation_range=None, scale_range=None, negative_sample_prob=0.0):
 
@@ -549,8 +541,6 @@ class TrackingDataset(Dataset):
             train_dataset = TrackingDataset(
                 tracking_data=train_data,
                 video_dir=video_dir,
-                output_size=output_size,
-                crop_size=crop_size,
                 future_frame_seek=future_frame_seek,
                 random_pick_future_seek=True,
                 interpolation_smoothness=interpolation_smoothness,
@@ -566,8 +556,6 @@ class TrackingDataset(Dataset):
             val_dataset = TrackingDataset(
                 tracking_data=val_data,
                 video_dir=video_dir,
-                output_size=output_size,
-                crop_size=crop_size,
                 future_frame_seek=future_frame_seek,
                 random_pick_future_seek=False,
                 interpolation_smoothness=interpolation_smoothness,
@@ -628,11 +616,14 @@ class TrackingDataset(Dataset):
     def _get_crop(self, frame_id, center, transform: Tuple[float, float]):
         frame = self._read_frame(frame_id)
 
+        crop_size = TrackingDataset._CROP_SIZE
+        output_size = TrackingDataset._OUTPUT_SIZE
+
         if transform is None:
-            x1 = int(center[0] - self.crop_size // 2)
-            y1 = int(center[1] - self.crop_size // 2)
-            x2 = x1 + self.crop_size
-            y2 = y1 + self.crop_size
+            x1 = int(center[0] - output_size // 2)
+            y1 = int(center[1] - output_size // 2)
+            x2 = x1 + output_size
+            y2 = y1 + output_size
 
             if x1 < 0 or y1 < 0 or x2 > frame.shape[1] or y2 > frame.shape[0]:
                 raise IndexError("Crop out of bounds")
@@ -640,27 +631,25 @@ class TrackingDataset(Dataset):
             return frame[y1:y2, x1:x2, :]
         else:
             rotation_deg, scale = transform
-            crop_size_large = self.crop_size * 2
-
             # Compute top-left corner of the large crop
-            x1 = int(center[0] - crop_size_large // 2)
-            y1 = int(center[1] - crop_size_large // 2)
-            x2 = x1 + crop_size_large
-            y2 = y1 + crop_size_large
+            x1 = int(center[0] - crop_size // 2)
+            y1 = int(center[1] - crop_size // 2)
+            x2 = x1 + crop_size
+            y2 = y1 + crop_size
 
             if x1 < 0 or y1 < 0 or x2 > frame.shape[1] or y2 > frame.shape[0]:
                 raise IndexError("Crop out of bounds")
 
             crop = frame[y1:y2, x1:x2, :]
 
-            center_point = (crop_size_large // 2, crop_size_large // 2)
+            center_point = (crop_size // 2, crop_size // 2)
             M = cv2.getRotationMatrix2D(center_point, rotation_deg, scale)
 
-            rotated = cv2.warpAffine(crop, M, (crop_size_large, crop_size_large), flags=cv2.INTER_LINEAR)
+            rotated = cv2.warpAffine(crop, M, (crop_size, crop_size), flags=cv2.INTER_LINEAR)
 
             # Final center crop to self.crop_size
-            start = crop_size_large // 2 - self.crop_size // 2
-            end = start + self.crop_size
+            start = crop_size // 2 - output_size // 2
+            end = start + output_size
 
             return rotated[start:end, start:end, :]
 
@@ -676,6 +665,9 @@ class TrackingDataset(Dataset):
             np.ndarray of shape (2,), transformed and rescaled offset in heatmap coordinates
         """
 
+        crop_size = TrackingDataset._CROP_SIZE
+        output_size = TrackingDataset._OUTPUT_SIZE
+
         if transform:
             rotation_deg, scale = transform
             theta = np.deg2rad(rotation_deg)
@@ -688,14 +680,16 @@ class TrackingDataset(Dataset):
 
             offset = R @ offset
 
-        heatmap_scale = self.output_size / self.crop_size
-        search_roi_hit = offset * heatmap_scale + self.output_size // 2
+        heatmap_scale = output_size / crop_size
+        search_roi_hit = offset * heatmap_scale + output_size // 2
 
         return search_roi_hit
 
     def generate_gaussian_heatmap(self, center ):
-        x = torch.arange(0, self.output_size, 1).float()
-        y = torch.arange(0, self.output_size, 1).float()
+        output_size = TrackingDataset._OUTPUT_SIZE
+
+        x = torch.arange(0, output_size, 1).float()
+        y = torch.arange(0, output_size, 1).float()
         y = y[:, None]
 
         x0, y0 = center
@@ -740,8 +734,6 @@ class TrackingDataset(Dataset):
         else:
             transform = None
 
-
-
         template_frame_id = template_tracking["frame_id"]
 
         if self.temporal_jitter_range > 0:
@@ -781,8 +773,9 @@ class TrackingDataset(Dataset):
         except IndexError:
             return self.__getitem__((idx + 1) % len(self))
         
-        template = self.tensor_transforms(template)
-        search = self.tensor_transforms(search)
+        to_tensor = transforms.ToTensor()
+        template = to_tensor(template)
+        search = to_tensor(search)
 
         # Augmentation with same seed
         if self.augmentation_transform:
@@ -797,7 +790,7 @@ class TrackingDataset(Dataset):
         search = self.normalize(search)
 
         if is_negative:
-            heatmap = torch.zeros((1, self.output_size, self.output_size))
+            heatmap = torch.zeros((1, TrackingDataset._OUTPUT_SIZE, TrackingDataset._OUTPUT_SIZE))
         else:
             offset = np.array(search_coordinate) - np.array(template_coordinate)
             search_roi_hit = self.transform_offset_for_heatmap(offset, transform)

@@ -22,8 +22,7 @@ from aegear.video import VideoClip
 
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
-#HEATMAP_MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-05-10.pth")
-HEATMAP_MODEL_PATH = resource_path("data/models/efficient_unet/best_model.pth")
+HEATMAP_MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-05-11.pth")
 #SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-05-04.pth")
 SIAMESE_MODEL_PATH = resource_path("data/models//siamese/best_model.pth")
 

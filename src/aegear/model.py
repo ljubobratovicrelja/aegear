@@ -78,72 +78,47 @@ class SiameseTracker(nn.Module):
     """
     def __init__(self, unet=EfficientUNet()):
         super().__init__()
+        
+        # Share encoders
+        self.enc1 = unet.enc1
+        self.enc2 = unet.enc2
+        self.enc3 = unet.enc3
+        self.enc4 = unet.enc4
 
-        # Reuse trained encoder from existing EfficientUNet instance
-        self.encoder = nn.Sequential(
-            unet.enc1,
-            unet.enc2,
-            unet.enc3,
-        )
-
-        HEAD_WIDTH = 256
-
-        # Feature normalization layer
-        self.normalize = nn.GroupNorm(num_groups=16, num_channels=HEAD_WIDTH)
-
-        # Initial reduction layer
-        self.initial = nn.Sequential(
-            nn.Conv2d(80, HEAD_WIDTH, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True)
-        )
-
-        self.resblock1 = nn.Sequential(
-            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1)
-        )
-
-        self.resblock2 = nn.Sequential(
-            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1)
-        )
-
-        self.resblock3 = nn.Sequential(  # New extra block
-            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(HEAD_WIDTH, HEAD_WIDTH, kernel_size=3, padding=1)
-        )
-
-        self.upsample = nn.Sequential(
-            nn.ConvTranspose2d(HEAD_WIDTH, 64, kernel_size=4, stride=2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 1, kernel_size=3, padding=1)
-        )
+        # Decoder with adjusted input channel sizes (concatenated feature maps)
+        self.up3 = unet._up_block(112 * 2, 80)
+        self.up2 = unet._up_block(80, 48)
+        self.up1 = unet._up_block(48, 32)
+        self.up0 = unet._up_block(32, 8)
+        self.out = unet.out  # Also use the output from the EfficientUNet.
 
     def forward(self, template, search):
-        feat_t = self.encoder(template)
-        feat_s = self.encoder(search)
+        # Encode both
+        t1, t2, t3, t4 = self.enc1(template), None, None, None
+        s1, s2, s3, s4 = self.enc1(search), None, None, None
 
-        feat_t = F.normalize(feat_t, p=2, dim=1)
-        feat_s = F.normalize(feat_s, p=2, dim=1)
+        t2 = self.enc2(t1)
+        s2 = self.enc2(s1)
 
-        x = torch.cat([feat_t, feat_s], dim=1)
+        t3 = self.enc3(t2)
+        s3 = self.enc3(s2)
 
-        x = self.initial(x)
-        x = self.normalize(x)
+        t4 = self.enc4(t3)
+        s4 = self.enc4(s3)
 
-        res = self.resblock1(x)
-        x = x + res
+        # Fuse at each level (concat)
+        f4 = torch.cat([t4, s4], dim=1)
+        f3 = torch.cat([t3, s3], dim=1)
+        f2 = torch.cat([t2, s2], dim=1)
+        f1 = torch.cat([t1, s1], dim=1)
 
-        res = self.resblock2(x)
-        x = x + res
+        d3 = self.up3(f4) + f3
+        d2 = self.up2(d3) + f2
+        d1 = self.up1(d2) + f1
+        d0 = self.up0(d1)
 
-        res = self.resblock3(x)
-        x = x + res
-
-        return self.upsample(x)
-
+        out = self.out(d0)
+        return F.interpolate(out, size=template.shape[2:], mode='bilinear', align_corners=False)
 
 
 class ConvClassifier(nn.Module):

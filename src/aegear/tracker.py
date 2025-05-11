@@ -92,9 +92,9 @@ class Kalman2D:
 class FishTracker:
 
     # Original window size for the training data.
-    WINDOW_SIZE = 129
+    WINDOW_SIZE = 128
     # The size of the tracking window.
-    TRACKER_WINDOW_SIZE = 129
+    TRACKER_WINDOW_SIZE = 128
 
     def __init__(self,
                  heatmap_model_path,
@@ -173,9 +173,6 @@ class FishTracker:
     def _init_transform():
         """Initialize the transform."""
         return transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                 std=[0.229, 0.224, 0.225]),
