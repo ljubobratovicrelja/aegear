@@ -260,7 +260,6 @@ class AegearMainWindow(tk.Tk):
         trajectory = np.array([ [t, coordinates[0], coordinates[1]] for t, (coordinates, _) in self._fish_tracking.items() ])
         self._smooth_trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
 
-    
     def _add_tracking_point(self, event):
         current_frame = self._get_current_frame_number()
         self.insert_tracking_point(current_frame, (event.x, event.y), 1.0)
@@ -319,8 +318,9 @@ class AegearMainWindow(tk.Tk):
         """Remove a tracking point from the listbox."""
         if frame_id in self._fish_tracking:
             del self._fish_tracking[frame_id]
-            self.tracking_listbox.delete(0, tk.END)
+            self.track_bar.mark_not_processed(frame_id)
             self.update_smooth_trajectory()
+            self._rebuild_tracking_listbox()
             self.update_gui()
 
     def _create_menu(self):
