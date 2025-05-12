@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 from PIL import Image, ImageTk
 import tkinter as tk
+from tkinter import ttk
 import tkinter.messagebox as messagebox
 import tkinter.filedialog as filedialog
 
@@ -15,8 +16,11 @@ import tkinter.filedialog as filedialog
 from aegear.calibration import SceneCalibration
 from aegear.trajectory import trajectory_length, smooth_trajectory, draw_trajectory
 from aegear.tracker import FishTracker
+
 from aegear.gui.tracking_bar import TrackingBar
 from aegear.gui.progress_reporter import ProgressReporter
+from aegear.gui.video_canvas import VideoCanvas
+
 from aegear.utils import resource_path
 from aegear.video import VideoClip
 
@@ -49,7 +53,6 @@ class AegearMainWindow(tk.Tk):
         # Initialize internal state.
         self._current_frame = None
         self._display_image = None
-        self._image_width = 0
         self._playing = False
         self._calibrated = False
         self._calibration_running = False
@@ -57,7 +60,10 @@ class AegearMainWindow(tk.Tk):
         self._first_frame_position = None
         self._fish_tracking = {}
         self._trajectory_smooth_size = 5
-        self._screen_points = []  # Screen points used for calibration.
+        self._smooth_trajectory = None
+        self._screen_points = []
+        self._num_frames = 100
+        self._clip = None
 
         # Boolean variable to control drawing the trajectory.
         self._draw_trajectory = tk.BooleanVar(value=True)
@@ -69,7 +75,6 @@ class AegearMainWindow(tk.Tk):
         self.dialog_window = tk.Toplevel(self)
         self.dialog_window.withdraw()
         self.dialog_window.title("Load Video")
-        initial_video = filedialog.askopenfilename(parent=self.dialog_window)
 
         # Initialize the fish tracker.
         self._tracker = FishTracker(HEATMAP_MODEL_PATH,
@@ -80,152 +85,169 @@ class AegearMainWindow(tk.Tk):
                                     search_stride=0.5,
                                     tracking_max_skip=7)
 
-        if initial_video == "":
-            # No video selected; show error and exit.
-            messagebox.showerror("Error", "No video selected.")
-            self.destroy()
-            sys.exit(1)
 
-        # Load video clip.
-        self.clip = VideoClip(initial_video)
-        self._num_frames = self.clip.duration * self.clip.fps
-
-        # Set up frames: center for video, bottom for slider/status, right for controls.
-        self.center_frame = tk.Frame(self)
-        self.center_frame.pack(side=tk.TOP)
-
-        self.bottom_frame = tk.Frame(self)
-        self.bottom_frame.pack(side=tk.BOTTOM)
-
-        self.right_frame = tk.Frame(self)
-        self.right_frame.pack(side=tk.RIGHT)
-
-        # Create image label to display video frames.
-        self.image_label = tk.Label(self.center_frame, cursor="cross")
-        self.image_label.grid(row=0, column=0, sticky="nsew")
-
-        # Create listbox with scrollbar to display tracked frames.
-        self.scrollbar = tk.Scrollbar(self.center_frame, orient=tk.VERTICAL)
-        self.scrollbar.grid(row=0, column=2, sticky="nsew")
-
-        self.tracking_listbox = tk.Listbox(self.center_frame, width=30, height=10, yscrollcommand=self.scrollbar.set)
-        self.tracking_listbox.grid(row=0, column=1, sticky="nsew")
-
-        # Configure grid weights.
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, weight=1)
-
-        # Bind events to the listbox.
-        self.tracking_listbox.bind('<<ListboxSelect>>', self._listbox_item_selected)
-        self.tracking_listbox.bind('<Delete>', self._listbox_item_deleted)
-        self.scrollbar.config(command=self.tracking_listbox.yview)
-
-        # Load the first video frame.
+        self._setup_main_ui_layout()
         self._load_first_frame()
-
-        # Create slider and tracking bar.
-        self.slider = tk.Scale(self.bottom_frame, from_=0, to=self._num_frames,
-                                 length=self._image_width, orient=tk.HORIZONTAL,
-                                 command=self.slider_value_changed)
-        self.slider.pack()
-
-        self.track_bar = TrackingBar(self.bottom_frame, self._num_frames,
-                                     width=self._image_width, height=10)
-        self.track_bar.pack()
-
-        # Label to display current video time.
-        self.label = tk.Label(self.bottom_frame, text="00:00:00")
-        self.label.pack()
-
-        # Create buttons for calibration and tracking control.
-        self.calibration_button = tk.Button(self.right_frame, text="Calibrate",
-                                            command=self._calibrate, fg="red")
-        self.calibration_button.pack(side=tk.LEFT)
-
-        self.set_track_start_button = tk.Button(self.right_frame, text="Set Track Start",
-                                                command=self._set_track_start, state=tk.NORMAL)
-        self.set_track_start_button.pack(side=tk.LEFT)
-
-        self.set_track_end_button = tk.Button(self.right_frame, text="Set Track End",
-                                              command=self._set_track_end, state=tk.NORMAL)
-        self.set_track_end_button.pack(side=tk.LEFT)
-
-        self.run_tracking_button = tk.Button(self.right_frame, text="Run Tracking",
-                                             command=self._run_tracking, state=tk.NORMAL)
-        self.run_tracking_button.pack(side=tk.LEFT)
-
-        self.reset_tracking_button = tk.Button(self.right_frame, text="Reset Tracking",
-                                               command=self._reset_tracking)
-        self.reset_tracking_button.pack(side=tk.LEFT)
-
-        # Scales for thresholds and tracking parameters.
-        self.tracking_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100,
-                                                 orient=tk.HORIZONTAL, label="Tracking Threshold",
-                                                 command=self._tracking_threshold_changed)
-        self.tracking_threshold_scale.set(int(self._tracker.tracking_threshold * 100.0))
-        self.tracking_threshold_scale.pack(side=tk.LEFT)
-
-        self.detection_threshold_scale = tk.Scale(self.right_frame, from_=0, to=100,
-                                                  orient=tk.HORIZONTAL, label="Detection Threshold",
-                                                  command=self._detection_threshold_changed)
-        self.detection_threshold_scale.set(int(self._tracker.detection_threshold * 100.0))
-        self.detection_threshold_scale.pack(side=tk.LEFT)
-
-        self.smooth_trajectory_scale = tk.Scale(self.right_frame, from_=1, to=100,
-                                                orient=tk.HORIZONTAL, label="Trajectory Smoothing",
-                                                command=self._trajectory_smooth_size_changed)
-        self.smooth_trajectory_scale.set(self._trajectory_smooth_size)
-        self.smooth_trajectory_scale.pack(side=tk.LEFT)
-
-        self.tracking_frame_scale = tk.Scale(self.right_frame, from_=1, to=100,
-                                             orient=tk.HORIZONTAL, label="Tracking Frame Skip",
-                                             command=self._trajectory_frame_skip_changed)
-        self.tracking_frame_scale.set(self._tracker.tracking_max_skip)
-        self.tracking_frame_scale.pack(side=tk.LEFT)
-
-        self.draw_trajectory_checkbox = tk.Checkbutton(self.right_frame, text="Draw Trajectory",
-                                                       variable=self._draw_trajectory)
-        self.draw_trajectory_checkbox.pack(side=tk.LEFT)
-
-        # Navigation buttons.
-        self.prev_frame_button = tk.Button(self.right_frame, text=u"\u23EE",
-                                           command=self.previous_frame)
-        self.prev_frame_button.pack(side=tk.LEFT)
-
-        self.pause_button = tk.Button(self.right_frame, text=u"\u23F8",
-                                      command=self._pause_tracking)
-        self.pause_button.pack(side=tk.RIGHT)
-
-        self.play_button = tk.Button(self.right_frame, text=u"\u25B6",
-                                     command=self._start_tracking)
-        self.play_button.pack(side=tk.RIGHT)
-
-        self.next_frame_button = tk.Button(self.right_frame, text=u"\u23ED",
-                                           command=self.next_frame)
-        self.next_frame_button.pack(side=tk.RIGHT)
-
-        # Status bars.
-        self.status_bar = tk.Label(self.bottom_frame, text="Not Calibrated", fg="red",
-                                   bd=1, relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-
-        self.distance_status_bar = tk.Label(self.bottom_frame, text="Distance: 0.0 cm", fg="blue",
-                                            bd=1, relief=tk.SUNKEN, anchor=tk.W)
-        self.distance_status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-
-        # Final GUI update and menu creation.
         self._setup_keypress_events()
         self._setup_image_mouse_events()
         self._create_menu()
 
-        # Refresh GUI drawing upon initialization.
-        self.update_gui()
+        # Final tk touches.
+        self.update_idletasks()
 
-        # Show window after setup.
+        # Set the window size to the minimum required size.
+        min_w = self.winfo_reqwidth()
+        min_h = self.winfo_reqheight()
+        min_h = max(min_h, 600)
+        min_w = max(min_w, 900)
+        self.minsize(min_w, min_h)
+
         self.deiconify()
     
+    def _setup_main_ui_layout(self):
+        """
+        Set up the main UI layout with a PanedWindow and frames for different sections."""
+
+        self.main_pane = tk.PanedWindow(self,
+                                        orient=tk.HORIZONTAL,
+                                        sashrelief=tk.RAISED,
+                                        bd=2,
+                                        bg='lightgrey',
+                                        sashwidth=6)
+        self.main_pane.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=(5, 0))
+
+        self.bottom_controls_frame = tk.Frame(self)
+        self.bottom_controls_frame.pack(side=tk.BOTTOM, fill=tk.X, expand=False, padx=5, pady=5)
+
+        self.left_toolbox_frame = tk.Frame(self.main_pane, bd=2, relief=tk.RAISED)
+        self.main_pane.add(self.left_toolbox_frame, minsize=180)
+
+        self.center_video_frame = tk.Frame(self.main_pane)
+        self.main_pane.add(self.center_video_frame, minsize=400)
+
+        self.right_listbox_frame = tk.Frame(self.main_pane)
+        self.main_pane.add(self.right_listbox_frame, minsize=150)
+
+        self.main_pane.paneconfig(self.left_toolbox_frame, stretch="never")
+        self.main_pane.paneconfig(self.center_video_frame, stretch="always")
+        self.main_pane.paneconfig(self.right_listbox_frame, stretch="never")
+
+        def _initialize_sash_positions():
+            if self.main_pane.winfo_ismapped() and self.main_pane.winfo_width() > 1:
+                total_width = self.main_pane.winfo_width()
+                left_width = int(total_width * 0.20)
+                center_width = int(total_width * 0.60)
+                sash0_pos = left_width
+                sash1_pos = left_width + center_width
+
+                try:
+                    self.main_pane.sash_place(0, sash0_pos, 0)
+                    self.main_pane.sash_place(1, sash1_pos, 0)
+                except tk.TclError as e:
+                    print(f"TclError setting sash positions: {e}")
+            else:
+                self.after(50, _initialize_sash_positions)
+
+        self.after_idle(_initialize_sash_positions)
+
+        # Toolbox frame
+        toolbox_padding = {'pady': 3, 'padx': 5}
+
+        calib_frame = tk.LabelFrame(self.left_toolbox_frame, text="Calibration")
+        calib_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
+
+        self.calibration_button = tk.Button(calib_frame, text="Calibrate", command=self._calibrate, fg="red")
+        self.calibration_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
+        track_control_frame = tk.LabelFrame(self.left_toolbox_frame, text="Tracking Control")
+        track_control_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
+
+        self.set_track_start_button = tk.Button(track_control_frame, text="Set Track Start", command=self._set_track_start)
+        self.set_track_start_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+        self.set_track_end_button = tk.Button(track_control_frame, text="Set Track End", command=self._set_track_end)
+        self.set_track_end_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
+        self.run_tracking_button = tk.Button(track_control_frame, text="Run Tracking", command=self._run_tracking)
+        self.run_tracking_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
+        self.reset_tracking_button = tk.Button(track_control_frame, text="Reset Tracking", command=self._reset_tracking)
+        self.reset_tracking_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
+        track_params_frame = tk.LabelFrame(self.left_toolbox_frame, text="Parameters")
+        track_params_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
+
+        self.tracking_threshold_scale = tk.Scale(track_params_frame, from_=0, to=100, orient=tk.HORIZONTAL, label="Tracking Thresh", command=self._tracking_threshold_changed)
+        self.tracking_threshold_scale.set(int(self._tracker.tracking_threshold * 100.0))
+        self.tracking_threshold_scale.pack(side=tk.TOP, fill=tk.X, pady=1, padx=5)
+
+        self.detection_threshold_scale = tk.Scale(track_params_frame, from_=0, to=100, orient=tk.HORIZONTAL, label="Detection Thresh", command=self._detection_threshold_changed)
+        self.detection_threshold_scale.set(int(self._tracker.detection_threshold * 100.0))
+        self.detection_threshold_scale.pack(side=tk.TOP, fill=tk.X, pady=1, padx=5)
+
+        self.smooth_trajectory_scale = tk.Scale(track_params_frame, from_=1, to=100, orient=tk.HORIZONTAL, label="Trajectory Smoothing", command=self._trajectory_smooth_size_changed)
+        self.smooth_trajectory_scale.set(self._trajectory_smooth_size)
+        self.smooth_trajectory_scale.pack(side=tk.TOP, fill=tk.X, pady=1, padx=5)
+
+        self.tracking_frame_scale = tk.Scale(track_params_frame, from_=1, to=100, orient=tk.HORIZONTAL, label="Frame Skip", command=self._trajectory_frame_skip_changed)
+        self.tracking_frame_scale.set(self._tracker.tracking_max_skip)
+        self.tracking_frame_scale.pack(side=tk.TOP, fill=tk.X, pady=1, padx=5)
+
+        display_options_frame = tk.LabelFrame(self.left_toolbox_frame, text="Display")
+        display_options_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
+
+        self.draw_trajectory_checkbox = tk.Checkbutton(display_options_frame, text="Draw Trajectory", variable=self._draw_trajectory)
+        self.draw_trajectory_checkbox.pack(side=tk.TOP, anchor=tk.W, pady=2, padx=5)
+
+        # Center pane - video display
+        self.video_canvas = VideoCanvas(self.center_video_frame)
+        self.video_canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Right pane - tracking listbox
+        self.scrollbar = tk.Scrollbar(self.right_listbox_frame, orient=tk.VERTICAL)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tracking_listbox = tk.Listbox(self.right_listbox_frame, yscrollcommand=self.scrollbar.set)
+        self.tracking_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scrollbar.config(command=self.tracking_listbox.yview)
+        self.tracking_listbox.bind('<<ListboxSelect>>', self._listbox_item_selected)
+        self.tracking_listbox.bind('<Delete>', self._listbox_item_deleted)
+
+        # Bottom controls - track bar and timeline navigation.
+        video_controls_frame = tk.Frame(self.bottom_controls_frame)
+        video_controls_frame.pack(side=tk.TOP, fill=tk.X, expand=True)
+
+        self.slider = tk.Scale(video_controls_frame, from_=0, to=self._num_frames, orient=tk.HORIZONTAL, showvalue=0, command=self.slider_value_changed)
+        self.slider.pack(side=tk.TOP, fill=tk.X, expand=True, padx=5, pady=(0, 2))
+
+        self.track_bar = TrackingBar(video_controls_frame, self._num_frames, height=10)
+        self.track_bar.pack(side=tk.TOP, fill=tk.X, expand=True, padx=5, pady=(0, 5))
+
+        nav_time_frame = tk.Frame(video_controls_frame)
+        nav_time_frame.pack(side=tk.TOP, fill=tk.X, expand=True)
+
+        tk.Frame(nav_time_frame).pack(side=tk.LEFT, expand=True)
+        self.prev_frame_button = tk.Button(nav_time_frame, text=u"\u23EE", command=self.previous_frame)
+        self.prev_frame_button.pack(side=tk.LEFT, padx=2)
+
+        self.play_button = tk.Button(nav_time_frame, text=u"\u25B6", command=self._start_tracking)
+        self.play_button.pack(side=tk.LEFT, padx=2)
+
+        self.pause_button = tk.Button(nav_time_frame, text=u"\u23F8", command=self._pause_tracking)
+        self.pause_button.pack(side=tk.LEFT, padx=2)
+
+        self.next_frame_button = tk.Button(nav_time_frame, text=u"\u23ED", command=self.next_frame)
+        self.next_frame_button.pack(side=tk.LEFT, padx=2)
+
+        self.label = tk.Label(nav_time_frame, text="00:00:00", width=10)
+        self.label.pack(side=tk.LEFT, padx=5)
+
+        tk.Frame(nav_time_frame).pack(side=tk.RIGHT, expand=True)
+
+        self.status_bar = tk.Label(self.bottom_controls_frame, text="Not Calibrated", fg="red", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X, expand=False)
+
+        self.distance_status_bar = tk.Label(self.bottom_controls_frame, text="Distance: 0.0 cm", fg="blue", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.distance_status_bar.pack(side=tk.BOTTOM, fill=tk.X, expand=False)
+
     def _setup_keypress_events(self):
         """Set keypress events for navigation."""
         self.bind("<Left>", lambda _: self._previous_tracked_frame())
@@ -236,10 +258,10 @@ class AegearMainWindow(tk.Tk):
     
     def _setup_image_mouse_events(self):
         """Set mouse events for image interactions."""
-        self.image_label.bind("<Button-1>", lambda event: self._add_tracking_point(event))
-        self.image_label.bind("<Button-3>", lambda event: self._remove_current_frame_track(event))
-        self.image_label.bind("<MouseWheel>", lambda event: self._seek_frames(event))
-    
+        self.video_canvas.on_left_click_callback = self._handle_canvas_left_click
+        self.video_canvas.on_right_click_callback = self._handle_canvas_right_click
+        self.video_canvas.on_mouse_wheel_callback = self._seek_frames
+
     def _delete_current_tracked_frame(self):
         """Delete the currently tracked frame from the list."""
         current_frame = self._get_current_frame_number()
@@ -260,9 +282,22 @@ class AegearMainWindow(tk.Tk):
         trajectory = np.array([ [t, coordinates[0], coordinates[1]] for t, (coordinates, _) in self._fish_tracking.items() ])
         self._smooth_trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
 
-    def _add_tracking_point(self, event):
+    def _handle_canvas_left_click(self, mapped_coords, event):
+        if self._calibration_running:
+            if mapped_coords:
+                self._screen_points.append(mapped_coords)
+
+                if len(self._screen_points) == 4:
+                    self._do_calibration()
+
+                self.update_gui()
+        elif mapped_coords:
+            current_frame = self._get_current_frame_number()
+            self.insert_tracking_point(current_frame, mapped_coords, 1.0)
+
+    def _handle_canvas_right_click(self, mapped_coords, event):
         current_frame = self._get_current_frame_number()
-        self.insert_tracking_point(current_frame, (event.x, event.y), 1.0)
+        self.remove_tracking_point(current_frame)
     
     def _next_tracked_frame(self):
         """Move to the next tracked frame."""
@@ -294,10 +329,6 @@ class AegearMainWindow(tk.Tk):
                 return
 
         self._play_frame(previous_frame)
-    
-    def _remove_current_frame_track(self, event):
-        current_frame = self._get_current_frame_number()
-        self.remove_tracking_point(current_frame)
     
     def _seek_frames(self, event):
         """Move to the tracked frame based on mouse wheel scroll."""
@@ -400,8 +431,6 @@ class AegearMainWindow(tk.Tk):
     
     def _tracking_ui_update(self, frame):
         """Update the UI with the current frame."""
-        self._play_frame(frame)
-        self.update_gui()
         self.update()
 
     def _run_tracking(self):
@@ -418,13 +447,19 @@ class AegearMainWindow(tk.Tk):
         end_frame = self.track_bar.processing_end
         progress_reporter = ProgressReporter(self, start_frame, end_frame)
 
-        # Unselect draw trajectory checkbox.
-        dt_status = self._draw_trajectory.get()
-        self._draw_trajectory.set(False)
+        self._current_frame = self._read_current_frame()
+
+        # Blur heavily the display image for background computation (focus) effect.
+
+        self._current_frame = cv2.resize(self._current_frame, None, fx=0.1, fy=0.1)
+        self._current_frame = cv2.GaussianBlur(self._current_frame, (3, 3), 0)
+        self._current_frame = cv2.resize(self._current_frame, None, fx=10, fy=10)
+
+        self.update_gui()
 
         try:
             self._tracker.run_tracking(
-                self.clip,
+                self._clip,
                 start_frame,
                 end_frame,
                 progress_reporter=progress_reporter,
@@ -434,11 +469,12 @@ class AegearMainWindow(tk.Tk):
             messagebox.showerror("Error", f"Tracking failed: {e}")
             self.status_bar['text'] = "Tracking failed."
             self.status_bar['fg'] = "red"
-            
-        # Return draw trajectory checkbox to its original state.
-        self._draw_trajectory.set(dt_status)
 
         progress_reporter.close()
+
+        # Redraw the current frame with the trajectory.
+        self._current_frame = self._read_current_frame()
+        self.update_gui()
 
     def _set_track_start(self):
         """Set the current slider position as the start of processing."""
@@ -507,7 +543,7 @@ class AegearMainWindow(tk.Tk):
             return
         
         file_dict = {
-            "video": self.clip.path,
+            "video": self._clip.path,
             "tracking": []
         }
 
@@ -536,12 +572,14 @@ class AegearMainWindow(tk.Tk):
             return
 
         try:
-            self.clip = VideoClip(path)
+            self._clip = VideoClip(path)
+            self._num_frames = int(self._clip.duration * self._clip.fps)
+            self.track_bar.change_number_of_frames(self._num_frames)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load video: {e}")
-            self.clip = None
+            self._clip = None
 
-        if self.clip is not None:
+        if self._clip is not None:
             self._calibrated = False
             self._calibration_running = False
             self._playing = False
@@ -549,14 +587,10 @@ class AegearMainWindow(tk.Tk):
             self._screen_points = []
             self._pixel_to_cm_ratio = 1.0
 
-            slider_length = self.clip.duration * self.clip.fps
-            self.slider.destroy()
-            self.slider = tk.Scale(self.bottom_frame, from_=0, to=slider_length,
-                                   length=self._image_width, orient=tk.HORIZONTAL,
-                                   command=self.slider_value_changed)
-            self.slider.pack()
+            self.slider.config(to=self._num_frames)
             self.slider.set(0)
             self._load_first_frame()
+            self.video_canvas.video_fps = self._clip.fps
 
     def _calibrate(self):
         """
@@ -573,10 +607,6 @@ class AegearMainWindow(tk.Tk):
                 self._screen_points = []
                 self.calibration_button['text'] = "Calibrate"
                 self.calibration_button['fg'] = "red"
-
-                # Rebind the button to add tracking points.
-                self.image_label.bind("<Button-1>", lambda event: self._add_tracking_point(event))
-
                 self._calibration_running = False
                 self._calibrated = False
 
@@ -591,7 +621,6 @@ class AegearMainWindow(tk.Tk):
         self.update_gui()
         self.status_bar['text'] = "Calibration started - left click to select corner points of the scene."
         self.status_bar['fg'] = "orange"
-        self.image_label.bind("<Button-1>", self._calibration_click)
         self.calibration_button['text'] = "Cancel Calibration"
         self.calibration_button['fg'] = "purple"
 
@@ -621,23 +650,8 @@ class AegearMainWindow(tk.Tk):
 
         self._screen_points = []
 
-        self.image_label.bind("<Button-1>", lambda event: self._add_tracking_point(event))
-
         self._reload_frame()
         self.update_gui()
-
-    def _calibration_click(self, event):
-        """
-        Handle a click during calibration.
-        Record the clicked point and update GUI.
-        Once four points are recorded, perform calibration.
-        """
-        self._screen_points.append((event.x, event.y))
-        self.update_gui()
-        if len(self._screen_points) == 4:
-            self._do_calibration()
-            return
-        self.status_bar['text'] = "Calibration point {} selected.".format(len(self._screen_points))
 
     def _get_current_frame_number(self):
         """Return the current frame number from the slider."""
@@ -660,7 +674,14 @@ class AegearMainWindow(tk.Tk):
         Retrieve a frame from the video clip.
         If calibrated, the frame is rectified.
         """
-        frame = self.clip.get_frame(float(frame_number) / float(self.clip.fps))
+        if self._clip is None:
+            # return a black frame of 720p
+            self._current_frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+            self._display_image = self._current_frame.copy()
+            self.update_gui()
+            return self._current_frame
+
+        frame = self._clip.get_frame(float(frame_number) / float(self._clip.fps))
         if self._calibrated:
             frame = self._scene_calibration.rectify_image(frame)
         return frame
@@ -708,55 +729,34 @@ class AegearMainWindow(tk.Tk):
         Uses a short sleep to synchronize with the video FPS.
         """
         while self._playing:
-            time.sleep(0.5 / self.clip.fps)
+            time.sleep(0.5 / self._clip.fps)
             self.after(1, self.next_frame)
 
     def update_gui(self):
         """
         Update the image display and the time label based on the current frame.
         """
-        self.update_image(self._display_image)
-        self.label['text'] = self._frame_to_time(float(self._get_current_frame_number()), self.clip.fps)
+        fps = self._clip.fps if self._clip else 30
+        current_frame_id = self._get_current_frame_number()
 
-    def update_frame(self, frame_id, image):
-        """
-        Update the display image with the current frame and overlay motion detection.
-        """
-        self.slider.set(frame_id)
-        self.update_image(self._display_image)
+        self.label['text'] = self._frame_to_time(float(current_frame_id), fps)
 
-    def update_image(self, image):
-        """
-        Update the image displayed in the GUI.
-        Draws calibration points, tracked positions, and trajectory.
-        """
-        if image is None:
-            return
+        # Determine overlay data
+        calib_points = self._screen_points if self._calibration_running or (self._calibrated and not self._screen_points) else []
+        track_point = self._fish_tracking.get(current_frame_id, [None])[0]
 
-        self._display_image = image.copy()
-        image = image.copy()
+        # Update the data info for correct trajectory drawing about the frame.
+        self.video_canvas.set_current_frame_id_for_trajectory(current_frame_id)
 
-        # Draw calibration points.
-        for point in self._screen_points:
-            image = cv2.circle(image, point, 5, (0, 0, 255), -1)
+        # Set overlays on canvas
+        self.video_canvas.set_calibration_points_overlay(calib_points)
+        self.video_canvas.set_tracked_point_overlay(track_point)
 
-        # Draw current tracked point if available.
-        frame_id = self._get_current_frame_number()
-        if frame_id in self._fish_tracking:
-            ((x, y), _) = self._fish_tracking[frame_id]
-            image = cv2.circle(image, (x, y), 5, (0, 255, 0), 2, cv2.LINE_AA)
+        trajectory_overlay = self._smooth_trajectory if self._draw_trajectory.get() else None
+        self.video_canvas.set_trajectory_overlay(trajectory_overlay)
 
-        # Draw trajectory if enabled.
-        if self._draw_trajectory.get() and len(self._fish_tracking) > 1:
-            travelDistance = trajectory_length(self._smooth_trajectory) * self._pixel_to_cm_ratio
-            self.distance_status_bar['text'] = "Distance: {} cm".format(travelDistance)
-            image = draw_trajectory(image, self._smooth_trajectory, self._get_current_frame_number())
-
-        # Convert image from OpenCV format to PIL, then to Tkinter-compatible image.
-        image = Image.fromarray(image)
-        image = ImageTk.PhotoImage(image)
-        self.image_label.configure(image=image)
-        self.image_label.image = image  # Prevent garbage collection.
+        # Set the main image (this triggers redraw including overlays)
+        self.video_canvas.set_image(self._current_frame)
 
     def slider_value_changed(self, value):
         """
