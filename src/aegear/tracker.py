@@ -44,51 +44,6 @@ class Prediction:
             self.roi,
         )
 
-class Kalman2D:
-    def __init__(self, r=1.0, q=0.1):
-        """Initialize the Kalman filter.
-        
-        Parameters
-        ----------
-        r : float
-            The measurement noise.
-        q : float
-            The process noise.
-        """
-        self.x = np.zeros((4, 1))  # state
-        self.P = np.eye(4) * 1000  # uncertainty
-
-        self.A = np.array([[1, 0, 1, 0],
-                           [0, 1, 0, 1],
-                           [0, 0, 1, 0],
-                           [0, 0, 0, 1]])
-
-        self.H = np.array([[1, 0, 0, 0],
-                           [0, 1, 0, 0]])
-
-        self.R = np.eye(2) * r # measurement noise
-        self.Q = np.eye(4) * q # process noise
-
-    def reset(self, x, y):
-        self.x = np.array([[x], [y], [0], [0]])
-        self.P = np.eye(4)
-
-    def update(self, z):
-        # Predict
-        self.x = self.A @ self.x
-        self.P = self.A @ self.P @ self.A.T + self.Q
-
-        # Update
-        z = np.array(z).reshape(2, 1)
-        y = z - self.H @ self.x
-        S = self.H @ self.P @ self.H.T + self.R
-        K = self.P @ self.H.T @ np.linalg.inv(S)
-
-        self.x = self.x + K @ y
-        self.P = (np.eye(4) - K @ self.H) @ self.P
-
-        return self.x[0, 0], self.x[1, 0]
-
 class FishTracker:
 
     # Original window size for the training data.
@@ -118,7 +73,6 @@ class FishTracker:
         self.last_result = None
         self.history = []
         self.frame_size = None
-        self.kalman = Kalman2D()
     
     def run_tracking(self, video: VideoClip, start_frame: int, end_frame: int, progress_reporter: ProgressReporter, model_track_register, ui_update):
         """Run the tracking on a video."""
@@ -230,8 +184,6 @@ class FishTracker:
 
                 prediction.roi = self._tracking_roi(frame, prediction.centroid)[1]
 
-                #self.kalman.reset(prediction.centroid[0], prediction.centroid[1])
-
                 return prediction
         else:
             self._debug_print("tracking")
@@ -241,10 +193,6 @@ class FishTracker:
 
             if result is not None:
                 prediction = result.global_coordinates((x1, y1))
-
-                #x, y = self.kalman.update(prediction.centroid)
-                #prediction.centroid = (int(x), int(y))
-
                 prediction.roi = self._tracking_roi(frame, prediction.centroid)[1]
 
                 self._debug_print(f"Found fish at ({result.centroid}) with confidence {result.confidence}")
@@ -450,7 +398,6 @@ class FishTracker:
             self._debug_print(f"Siamese: Confidence {confidence} is below threshold {self.tracking_threshold}")
             return None
         
-        # Note that for siamese we don't store the roi, because we afterwards do kalman filtering.
         return Prediction(confidence, centroid, roi=None)
 
 
