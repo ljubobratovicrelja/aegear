@@ -1,6 +1,6 @@
 [project]
 name = "aegear"
-version = "0.2.0"
+version = "0.3.0"
 description = "Computer vision toolkit for fish tracking and behavioral analysis in aquaculture research environments."
 authors = [
     { name = "Relja Ljubobratovic", email = "ljubobratovic.relja@gmail.com" },
