@@ -74,8 +74,8 @@ class AegearMainWindow(tk.Tk):
         # Initialize the fish tracker.
         self._tracker = FishTracker(HEATMAP_MODEL_PATH,
                                     SIAMESE_MODEL_PATH,
-                                    tracking_threshold=0.85,
-                                    detection_threshold=0.85,
+                                    tracking_threshold=0.9,
+                                    detection_threshold=0.9,
                                     debug=False,
                                     search_stride=0.5,
                                     tracking_max_skip=7)
