@@ -15,6 +15,7 @@ hidden_imports = collect_submodules("aegear")
 data_folder = project_root / "data"
 data_files = [
     ("media/icon.ico", "media"),
+    ("media/logo.png", "media"),
     ("data/calibration.xml", "data"),
     ("data/models/model_cnn3_2023-08-16.pth", "data/models"),
     ("data/models/model_efficient_unet_2025-04-04.pth", "data/models"),
