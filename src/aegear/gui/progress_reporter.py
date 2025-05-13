@@ -118,8 +118,8 @@ class ProgressReporter:
         window_height = self.window.winfo_height()
 
         # Calculate position to center the window
-        position_x = parent_x + (parent_width // 2) - (window_width // 2)
-        position_y = parent_y + (parent_height // 2) - (window_height // 2)
+        position_x = parent_x + (parent_width // 2) - window_width
+        position_y = parent_y + (parent_height // 2) - window_height
 
         # Set the geometry (position only, size is determined by contents)
         self.window.geometry(f"+{position_x}+{position_y}")
