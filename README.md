@@ -36,14 +36,9 @@ At the core of Aegear is a deep learning system for spatial fish localization an
 
 The model outputs a single-channel heatmap representing fish likelihood and position within each frame. Training uses a combination of weighted binary cross-entropy (focusing on central activations) and a custom centroid distance loss that penalizes spatial errors in predicted heatmap peaks, improving precision under class imbalance and subtle cues.
 
-Tracking is initialized using a sliding-window search constrained by motion segmentation via OpenCV’s KNN background subtraction algorithm (Zivkovic & van der Heijden, 2006). Once the target is detected, tracking operates through a **Siamese network** built on the same EfficientNet encoder, reusing weights from the detection model. The tracker compares features between two consecutive frames—using a template (previous frame) and a search region (current frame)—and applies a convolutional head to generate a response heatmap, yielding accurate and drift-free localization. When tracking confidence drops, Aegear falls back to a sliding-window application of the original EfficientUNet for re-detection, achieving robust, zero-drift tracking even in complex visual conditions.
+Tracking starts with the **EfficientUNet** detector applied in a sliding-window over the entire frame, using a motion mask from OpenCV’s KNN background subtractor (Zivkovic & van der Heijden, 2006). Once the fish is found, Aegear switches to a **Siamese** tracker that shares the EfficientNet-B0 encoder and reuses its weights. It extracts multi-level features from both the last ROI (template) and the current ROI (search), concatenates them, and decodes via a multi-stage upsampling path to produce a high-resolution response heatmap for precise, drift-free localization. Confidence-guided frame skipping optimizes speed. If confidence drops, Aegear falls back to sliding-window detection with the original EfficientUNet to re-initialize, ensuring robust tracking even under occlusion or appearance changes.
 
 For real-world analysis, Aegear includes a calibration module with intrinsic parameter estimation via Zhang’s method and extrinsic metric scaling from four known tank reference points. This enables reconstruction of fish trajectories in metric units (e.g., centimeters), suitable for behavioral and activity-level studies.
-
-In addition to the main pipeline, Aegear includes tools for:
-- camera calibration and manual ROI annotation from videos,
-- COCO-style dataset generation and polygon-to-heatmap conversion using distance transforms,
-- synthetic dataset augmentation by compositing fish onto complex backgrounds.
 
 ---
 
@@ -53,12 +48,22 @@ Aegear was originally developed as a tool to assist the PhD project of Georgina 
 
 While existing tools such as [idtracker.ai](https://idtracker.ai/latest/) (Romero-Ferrero et al., 2018) have made significant advances in animal tracking in controlled laboratory setups, they often require clean backgrounds and consistent lighting to operate effectively. Aegear was initiated specifically to address the limitations of such systems in real aquaculture conditions, where floor texture, lighting, and water reflections introduce noise and complexity not handled well by traditional segmentation-based pipelines.
 
+The current system integrates an EfficientUNet model built on EfficientNet-B0 (Tan & Le, 2019) for detection, and a Siamese network for visual tracking inspired by fully convolutional Siamese trackers (Bertinetto et al., 2016), enabling fast, appearance-based localization without manual re-identification.
+
 > Fazekas, G.: Investigating the effects of environmental factors and feeding strategies on early life development and behavior of Russian sturgeon (Acipenser gueldenstaedtii) and sterlet (A. ruthenus) [Doctoral thesis].
 > Hungarian University of Agriculture and Life Sciences (MATE), Hungary.  
 >
 > Romero-Ferrero, F., Bergomi, M. G., Hinz, R., Heras, F. J. H., & de Polavieja, G. G. (2018).
 > idtracker.ai: tracking all individuals in small or large collectives of unmarked animals.
 > Nature Methods, 16(2), 179–182. [arXiv:1803.04351]
+>
+> Tan, M., & Le, Q. V. (2019).
+> EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks.
+> Proceedings of the 36th International Conference on Machine Learning, PMLR 97:6105–6114. arXiv:1905.11946
+>
+> Bertinetto, L., Valmadre, J., Henriques, J. F., Vedaldi, A., & Torr, P. H. S. (2016).
+> Fully-Convolutional Siamese Networks for Object Tracking.
+> European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549
 
 Since that initial application, Aegear has significantly expanded in scope. The pipeline has undergone several architectural revisions, added support tools (e.g., dataset generation, synthetic augmentation, calibration), and now includes predictive motion modeling via temporal networks. Aegear is an actively evolving project aimed at providing a generalizable, modular framework for aquatic behavioral analysis, with open-ended support for future enhancements and applications beyond the original sturgeon experiments.
 
