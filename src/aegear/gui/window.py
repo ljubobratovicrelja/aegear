@@ -1,12 +1,12 @@
-import sys
 import json
 import threading
 import time
+import bisect
 
 # Third-party imports
 import numpy as np
 import cv2
-from PIL import Image, ImageTk
+
 import tkinter as tk
 from tkinter import ttk
 import tkinter.messagebox as messagebox
@@ -14,7 +14,7 @@ import tkinter.filedialog as filedialog
 
 # Internal modules
 from aegear.calibration import SceneCalibration
-from aegear.trajectory import trajectory_length, smooth_trajectory, draw_trajectory
+from aegear.trajectory import trajectory_length, smooth_trajectory
 from aegear.tracker import FishTracker
 
 from aegear.gui.tracking_bar import TrackingBar
@@ -60,6 +60,7 @@ class AegearMainWindow(tk.Tk):
         self._pixel_to_cm_ratio = 1.0
         self._first_frame_position = None
         self._fish_tracking = {}
+        self._sorted_tracked_frame_ids = []
         self._trajectory_smooth_size = 5
         self._smooth_trajectory = None
         self._screen_points = []
@@ -204,13 +205,53 @@ class AegearMainWindow(tk.Tk):
         self.video_canvas.pack(fill=tk.BOTH, expand=True)
 
         # Right pane - tracking listbox
-        self.scrollbar = tk.Scrollbar(self.right_listbox_frame, orient=tk.VERTICAL)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.tracking_listbox = tk.Listbox(self.right_listbox_frame, yscrollcommand=self.scrollbar.set)
-        self.tracking_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.scrollbar.config(command=self.tracking_listbox.yview)
-        self.tracking_listbox.bind('<<ListboxSelect>>', self._listbox_item_selected)
-        self.tracking_listbox.bind('<Delete>', self._listbox_item_deleted)
+        self._tree_columns = ("frame", "centroid", "confidence")
+        self._tree_column_headers = {"frame": "FRAME", "centroid": "CENTROID", "confidence": "CONFIDENCE"}
+        self._tree_col_widths = {"frame": 80, "centroid": 150, "confidence": 100}
+        self._tree_font = ("Courier", 10)
+
+        # Create a style for the Treeview
+        style = ttk.Style(self)
+        style.configure("Custom.Treeview", font=self._tree_font, rowheight=int(self._tree_font[1] * 1.5))
+        style.configure("Custom.Treeview.Heading", font=(self._tree_font[0], self._tree_font[1], 'bold'))
+
+        self.tracking_tree = ttk.Treeview(
+            self.right_listbox_frame,
+            columns=self._tree_columns,
+            show="headings",
+            style="Custom.Treeview"
+        )
+
+        # Define headings and column properties
+        for col_id in self._tree_columns:
+            self.tracking_tree.heading(
+                col_id,
+                text=self._tree_column_headers[col_id],
+                anchor=tk.CENTER # Center the header text
+            )
+            self.tracking_tree.column(
+                col_id,
+                width=self._tree_col_widths[col_id],
+                minwidth=50,
+                anchor=tk.CENTER,
+                stretch=tk.YES
+            )
+
+        # Add a vertical scrollbar
+        self.tree_scrollbar_y = ttk.Scrollbar(
+            self.right_listbox_frame,
+            orient=tk.VERTICAL,
+            command=self.tracking_tree.yview
+        )
+        self.tracking_tree.configure(yscrollcommand=self.tree_scrollbar_y.set)
+
+        # Pack the Treeview and Scrollbar
+        # The Treeview should take up most space, scrollbar next to it.
+        self.tree_scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tracking_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.tracking_tree.bind('<<TreeviewSelect>>', self._treeview_item_selected)
+        self.tracking_tree.bind('<Delete>', self._treeview_item_deleted) # Or handle deletion differently
 
         # Bottom controls - track bar and timeline navigation.
         video_controls_frame = tk.Frame(self.bottom_controls_frame)
@@ -238,7 +279,7 @@ class AegearMainWindow(tk.Tk):
         self.next_frame_button = tk.Button(nav_time_frame, text=u"\u23ED", command=self.next_frame)
         self.next_frame_button.pack(side=tk.LEFT, padx=2)
 
-        self.timeline_label = tk.Label(nav_time_frame, text="00:00:00", width=30)
+        self.timeline_label = tk.Label(nav_time_frame, text="00:00:00", width=50)
         self.timeline_label.pack(side=tk.LEFT, padx=5)
 
         tk.Frame(nav_time_frame).pack(side=tk.RIGHT, expand=True)
@@ -267,18 +308,106 @@ class AegearMainWindow(tk.Tk):
         """Delete the currently tracked frame from the list."""
         current_frame = self._get_current_frame_number()
         if current_frame in self._fish_tracking:
-            del self._fish_tracking[current_frame]
+            self.remove_tracking_point(current_frame)
         
         self.update_smooth_trajectory()
-        self._rebuild_tracking_listbox()
+        self._rebuild_tracking_treeview()
     
-    def _rebuild_tracking_listbox(self):
+    def _rebuild_tracking_treeview(self):
         """Rebuild the tracking listbox from the current fish tracking data."""
-        self.tracking_listbox.delete(0, tk.END)
-        for frame_id, (_, confidence) in sorted(self._fish_tracking.items()):
-            self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
+        self.tracking_tree.delete(*self.tracking_tree.get_children())
+        for frame_id, (coordinates, confidence) in sorted(self._fish_tracking.items()):
+            self._register_tracking_to_ui(frame_id, coordinates, confidence)
         self.update_gui()
-    
+
+    def _format_listbox_entry(self, frame_id, coordinates, confidence):
+        """Formats tracking data for display in the listbox, aligned with headers."""
+        frame_w = self._listbox_col_widths["frame"]
+        centroid_w = self._listbox_col_widths["centroid"]
+        conf_w = self._listbox_col_widths["confidence"]
+
+        frame_str = str(frame_id)
+        # Ensure coordinates is a tuple for consistent formatting
+        if isinstance(coordinates, (list, tuple)) and len(coordinates) == 2:
+            centroid_str = f"({coordinates[0]:3d},{coordinates[1]:3d})" # Fixed width for numbers
+        else:
+            centroid_str = str(coordinates) # Fallback
+
+        conf_str = f"{confidence * 100.0:.0f}%" # Integer percentage for confidence
+
+        eff_frame_w = frame_w 
+        eff_centroid_w = centroid_w
+        eff_conf_w = conf_w
+        
+        s1 = f"{frame_str:^{eff_frame_w}}"
+        s2 = f"{centroid_str:^{eff_centroid_w}}"
+        s3 = f"{conf_str:^{eff_conf_w}}"
+        
+        f_str = str(frame_id).center(frame_w)
+        c_str = f"({coordinates[0]:3d},{coordinates[1]:3d})".center(centroid_w)
+        conf_val_str = f"{confidence * 100.0:.0f}%".center(conf_w)
+        
+        line = " {frame:^{fw}} | {centroid:^{cw}} | {conf:^{conf_w}} ".format(
+            frame=str(frame_id), fw=frame_w,
+            centroid=f"({coordinates[0]:3d},{coordinates[1]:3d})", cw=centroid_w,
+            conf=f"{confidence * 100.0:.0f}%", conf_w=conf_w
+        )
+
+        frame_text = str(frame_id).center(self._listbox_col_widths["frame"])
+        centroid_text = f"({coordinates[0]:3d},{coordinates[1]:3d})".center(self._listbox_col_widths["centroid"])
+        confidence_text = f"{confidence * 100.0:.0f}%".center(self._listbox_col_widths["confidence"])
+
+        return f"| {frame_text} | {centroid_text} | {confidence_text} |"
+
+    def _format_treeview_values(self, frame_id, coordinates, confidence):
+        """Helper to format data specifically for the Treeview values tuple."""
+        frame_val_str = str(frame_id) # Frame ID for the first column
+
+        if isinstance(coordinates, (list, tuple)) and len(coordinates) == 2:
+            # Consistent formatting for centroid
+            centroid_val_str = f"({coordinates[0]:3d},{coordinates[1]:3d})"
+        else:
+            centroid_val_str = str(coordinates) # Fallback
+
+        conf_val_str = f"{confidence * 100.0:.1f}%"
+        return (frame_val_str, centroid_val_str, conf_val_str)
+
+
+    def _register_tracking_to_ui(self, frame_id, coordinates, confidence):
+        """
+        Registers or updates a tracking point in the UI's Treeview.
+        If frame_id exists, it updates the item.
+        If not, it inserts the new item in an order sorted by frame_id.
+        """
+        item_iid = str(frame_id) # Use the string representation of frame_id as the Item ID
+        
+        item_values = self._format_treeview_values(frame_id, coordinates, confidence)
+
+        if self.tracking_tree.exists(item_iid):
+            self.tracking_tree.item(item_iid, values=item_values)
+        else:
+            all_current_iids_str = self.tracking_tree.get_children('')
+            
+            current_frame_ids_in_tree = []
+            for iid_str in all_current_iids_str:
+                try:
+                    current_frame_ids_in_tree.append(int(iid_str))
+                except ValueError:
+                    # TODO: figure out how to report errors the right way...
+                    print(f"WARNING: Non-integer IID '{iid_str}' encountered in Treeview during sort.")
+            
+            current_frame_ids_in_tree.sort()
+            insertion_index_in_sorted_list = bisect.bisect_left(current_frame_ids_in_tree, frame_id)
+            
+            self.tracking_tree.insert(
+                parent='',
+                index=insertion_index_in_sorted_list,
+                iid=item_iid,
+                values=item_values
+            )
+
+        self.tracking_tree.see(item_iid)
+
     def update_smooth_trajectory(self):
         trajectory = np.array([ [t, coordinates[0], coordinates[1]] for t, (coordinates, _) in self._fish_tracking.items() ])
         self._smooth_trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
@@ -307,37 +436,61 @@ class AegearMainWindow(tk.Tk):
 
         current_frame = self._get_current_frame_number()
         self.remove_tracking_point(current_frame)
-    
-    def _next_tracked_frame(self):
-        """Move to the next tracked frame."""
-        if len(self._fish_tracking) < 1:
+
+    def _update_treeview_selection(self, target_frame_id):
+        """Clears current selection and selects/scrolls to the target_frame_id in Treeview."""
+        if not hasattr(self, 'tracking_tree'):
             return
 
-        current_frame = self._get_current_frame_number()
-        next_frame = current_frame + 1
+        target_iid = str(target_frame_id)
 
-        while next_frame not in self._fish_tracking:
-            if next_frame >= self._num_frames:
-                return
-            next_frame += 1
+        for selected_item_iid in self.tracking_tree.selection():
+            self.tracking_tree.selection_remove(selected_item_iid)
 
-        self._play_frame(next_frame)
+        if self.tracking_tree.exists(target_iid):
+            self.tracking_tree.selection_set(target_iid)
+            self.tracking_tree.see(target_iid) # Scroll to make the item visible
+        else:
+            # TODO: same as above, find the right way to report errors.
+            print(f"WARNING: Frame ID {target_frame_id} not found in Treeview for selection.")
+
+    def _next_tracked_frame(self):
+        """Move to the next frame that has tracking data and update Treeview selection."""
+        if not self._sorted_tracked_frame_ids:
+            return
+
+        current_frame_on_slider = self._get_current_frame_number()
+        insertion_point = bisect.bisect_right(self._sorted_tracked_frame_ids, current_frame_on_slider)
+
+        if insertion_point < len(self._sorted_tracked_frame_ids):
+            next_tracked_frame_id = self._sorted_tracked_frame_ids[insertion_point]
+            self._update_treeview_selection(next_tracked_frame_id)
+        else:
+            last_tracked_frame = self._sorted_tracked_frame_ids[-1]
+            if current_frame_on_slider < last_tracked_frame:
+                self._update_treeview_selection(last_tracked_frame)
 
     def _previous_tracked_frame(self):
-        """Move to the previous tracked frame."""
-        if len(self._fish_tracking) < 1:
+        """Move to the previous frame that has tracking data and update Treeview selection."""
+        if not self._sorted_tracked_frame_ids: # No tracked frames
             return
 
-        current_frame = self._get_current_frame_number()
-        previous_frame = current_frame - 1
+        current_frame_on_slider = self._get_current_frame_number()
+        insertion_point = bisect.bisect_left(self._sorted_tracked_frame_ids, current_frame_on_slider)
 
-        while previous_frame not in self._fish_tracking:
-            previous_frame -= 1
+        if insertion_point > 0:
+            previous_tracked_frame_id = self._sorted_tracked_frame_ids[insertion_point - 1]
 
-            if previous_frame < 0:
-                return
-
-        self._play_frame(previous_frame)
+            if previous_tracked_frame_id == current_frame_on_slider and insertion_point - 2 >= 0:
+                previous_tracked_frame_id = self._sorted_tracked_frame_ids[insertion_point - 2]
+                self._update_treeview_selection(previous_tracked_frame_id)
+            elif previous_tracked_frame_id < current_frame_on_slider:
+                self._update_treeview_selection(previous_tracked_frame_id)
+        else:
+            first_tracked_frame = self._sorted_tracked_frame_ids[0]
+            if current_frame_on_slider > first_tracked_frame:
+                self._update_treeview_selection(first_tracked_frame)
+    
     
     def _seek_frames(self, event):
         """Move to the tracked frame based on mouse wheel scroll."""
@@ -346,11 +499,16 @@ class AegearMainWindow(tk.Tk):
         else:
             self.previous_frame()
     
+    def updated_sorted_tracked_frame_ids(self):
+        """Update the sorted list of tracked frame IDs."""
+        self._sorted_tracked_frame_ids = sorted(self._fish_tracking.keys())
+    
     def insert_tracking_point(self, frame_id, coordinates, confidence):
         """Insert a tracking point into the listbox."""
-        self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
         self._fish_tracking[frame_id] = (coordinates, confidence)
+        self.updated_sorted_tracked_frame_ids()
         self.track_bar.mark_processed(frame_id)
+        self._register_tracking_to_ui(frame_id, coordinates, confidence)
         self.update_smooth_trajectory()
         self.update_gui()
     
@@ -358,9 +516,14 @@ class AegearMainWindow(tk.Tk):
         """Remove a tracking point from the listbox."""
         if frame_id in self._fish_tracking:
             del self._fish_tracking[frame_id]
+            self.updated_sorted_tracked_frame_ids()
             self.track_bar.mark_not_processed(frame_id)
+
+            if self.tracking_tree.exists(frame_id):
+                self.tracking_tree.delete(frame_id)
+
             self.update_smooth_trajectory()
-            self._rebuild_tracking_listbox()
+            self._rebuild_tracking_treeview()
             self.update_gui()
 
     def _create_menu(self):
@@ -380,31 +543,42 @@ class AegearMainWindow(tk.Tk):
 
         self.config(menu=self.menu_bar)
 
-    def _listbox_item_selected(self, event):
+    def _treeview_item_selected(self, event):
         """
         Callback when an item in the tracking listbox is selected.
         Updates the current frame to the selected frame.
         """
-        sel = self.tracking_listbox.curselection()
-        if not sel:
+        selected_items = self.tracking_tree.selection() # Returns a tuple of selected item IDs
+        if not selected_items:
             return
 
-        item_selected = sel[0]
-        # Extract frame id from the listbox item (format: "frame_id: score")
-        frame_id = int(self.tracking_listbox.get(item_selected).split(":")[0])
-        self._set_frame(frame_id)
-        self.update_gui()
+        item_iid = selected_items[0] # Assuming single selection
+        # The iid is the frame_id we used during insert
+        try:
+            frame_id = int(item_iid)
+            self._set_frame(frame_id) # Your method to jump to a frame
+            self.update_gui()
+        except ValueError:
+            print(f"Error: Could not parse frame_id from Treeview item iid: {item_iid}")
 
-    def _listbox_item_deleted(self, event):
+    def _treeview_item_deleted(self, event):
         """
         Callback when an item in the tracking listbox is deleted.
         Removes the corresponding processed frame marker.
         """
-        item_selected = self.tracking_listbox.curselection()[0]
-        frame_id = int(self.tracking_listbox.get(item_selected).split(":")[0])
-        self.track_bar.mark_not_processed(frame_id)
-        del self._fish_tracking[frame_id]
-        self.tracking_listbox.delete(item_selected)
+        selected_items = self.tracking_tree.selection()
+        if not selected_items:
+            return
+
+        for item_iid in selected_items:
+            try:
+                frame_id = int(item_iid)
+                self.remove_tracking_point(frame_id)
+
+            except ValueError:
+                print(f"Error: Could not parse frame_id for deletion: {item_iid}")
+                
+        self.update_smooth_trajectory()
         self.update_gui()
 
     def _tracking_threshold_changed(self, value):
@@ -436,7 +610,11 @@ class AegearMainWindow(tk.Tk):
     def _tracking_model_register(self, frame, centroid, confidence):
         """Register a tracking model for the current frame."""
         (x, y) = self._scene_calibration.rectify_point(centroid)
-        self.insert_tracking_point(frame, (int(x), int(y)), confidence)
+        coordinates = (int(x), int(y))
+        self._fish_tracking[frame] = (coordinates, confidence)
+        self._register_tracking_to_ui(frame, coordinates, confidence)
+        self.track_bar.mark_processed(frame)
+        self.update_gui()
     
     def _tracking_ui_update(self, frame):
         """Update the UI with the current frame."""
@@ -481,6 +659,10 @@ class AegearMainWindow(tk.Tk):
 
         progress_reporter.close()
 
+        # Refresh helper data after tracking.
+        self.update_smooth_trajectory()
+        self.updated_sorted_tracked_frame_ids()
+
         # Redraw the current frame with the trajectory.
         self._current_frame = self._read_current_frame()
         self.update_gui()
@@ -488,22 +670,25 @@ class AegearMainWindow(tk.Tk):
     def _set_track_start(self):
         """Set the current slider position as the start of processing."""
         self.track_bar.mark_processing_start(self.slider.get())
+        self.update_gui()
 
     def _set_track_end(self):
         """Set the current slider position as the end of processing."""
         self.track_bar.mark_processing_end(self.slider.get())
+        self.update_gui()
 
     def _reset_tracking(self):
         """Reset all tracking markers and clear the tracking list."""
         self.track_bar.clear()
         self._fish_tracking = {}
+        self._sorted_tracked_frame_ids = []
         self._smooth_trajectory = None
-        self.tracking_listbox.delete(0, tk.END)
+        self.tracking_tree.delete(*self.tracking_tree.get_children())
         self.update_gui()
 
     def _about(self):
         """Display information about the application."""
-        messagebox.showinfo("About", "Aegear\n\nAuthor: Relja Ljubobratovic\nEmail: ljubobratovic.relja@gmail.com")
+        messagebox.showinfo("About", "Aegear\n\nAuthor: Relja Ljubobratovic\n\nGitHub: https://github.com/ljubobratovicrelja/aegear\nEmail: ljubobratovic.relja@gmail.com")
 
     def _load_tracking(self):
         filename = filedialog.askopenfilename(defaultextension=".json",
@@ -522,9 +707,7 @@ class AegearMainWindow(tk.Tk):
             messagebox.showerror("Error", f"Failed to load tracking data: {e}")
             return
         
-        self.track_bar.clear()
-        self.tracking_listbox.delete(0, tk.END)
-        self._fish_tracking = {}
+        self._reset_tracking()
 
         for item in file_dict["tracking"]:
             frame_id = item["frame_id"]
@@ -532,10 +715,11 @@ class AegearMainWindow(tk.Tk):
             confidence = item["confidence"]
             self._fish_tracking[frame_id] = (coordinates, confidence)
             self.track_bar.mark_processed(frame_id)
-            self.tracking_listbox.insert(tk.END, "{}: {}".format(frame_id, confidence))
+            self._register_tracking_to_ui(frame_id, coordinates, confidence)
         
         self.update_smooth_trajectory()
-        self._rebuild_tracking_listbox()
+        self.updated_sorted_tracked_frame_ids()
+        self._rebuild_tracking_treeview()
         self.update_gui()
 
         self.status_bar['text'] = "Tracking data loaded from {}".format(filename)
@@ -782,7 +966,13 @@ class AegearMainWindow(tk.Tk):
         fps = self._clip.fps if self._clip else 30
         current_frame_id = self._get_current_frame_number()
 
+
         self.timeline_label['text'] = f"Time: {self._frame_to_time(float(current_frame_id), fps)}, Frame: {current_frame_id}/{self._num_frames}"
+
+        if self._clip and self.track_bar.processing_start is not None and self.track_bar.processing_end is not None:
+            self.timeline_label['text'] += f", Tracking: {self.track_bar.processing_start} - {self.track_bar.processing_end}"
+        else:
+            self.timeline_label['text'] += ", Tracking: Not set"
 
         # Determine overlay data
         calib_points = self._screen_points if self._calibration_running or (self._calibrated and not self._screen_points) else []
@@ -825,16 +1015,6 @@ class AegearMainWindow(tk.Tk):
         self._display_image = self._current_frame.copy()
         assert self._current_frame is not None, "Failed to load first frame."
         self._image_width = self._current_frame.shape[1]
-
-        # Use a temporary Text widget to determine one-line height.
-        temp_text = tk.Text(self.tracking_listbox, height=1, font=("TkDefaultFont"))
-        temp_text.pack()
-        self.tracking_listbox.update()
-        AegearMainWindow.ONE_LINE_HEIGHT = temp_text.winfo_reqheight() + 4  # Add margin.
-        temp_text.destroy()
-
-        self.tracking_listbox.config(height=int(self._current_frame.shape[0] / AegearMainWindow.ONE_LINE_HEIGHT))
-        self.tracking_listbox.update()
 
     def _frame_to_time(self, frame, fps):
         """
