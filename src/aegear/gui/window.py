@@ -238,8 +238,8 @@ class AegearMainWindow(tk.Tk):
         self.next_frame_button = tk.Button(nav_time_frame, text=u"\u23ED", command=self.next_frame)
         self.next_frame_button.pack(side=tk.LEFT, padx=2)
 
-        self.label = tk.Label(nav_time_frame, text="00:00:00", width=10)
-        self.label.pack(side=tk.LEFT, padx=5)
+        self.timeline_label = tk.Label(nav_time_frame, text="00:00:00", width=30)
+        self.timeline_label.pack(side=tk.LEFT, padx=5)
 
         tk.Frame(nav_time_frame).pack(side=tk.RIGHT, expand=True)
 
@@ -576,6 +576,10 @@ class AegearMainWindow(tk.Tk):
 
     def _load_video(self):
         """Load a new video file and reinitialize the video processing."""
+        if len(self._fish_tracking) > 0:
+            if not messagebox.askokcancel("Warning", "Loading a new video will reset all tracking data. Proceed?"):
+                return
+
         path = filedialog.askopenfilename()
         if path == "":
             return
@@ -594,13 +598,15 @@ class AegearMainWindow(tk.Tk):
 
             self.slider.config(to=self._num_frames)
             self.slider.set(0)
-            self._load_aegear_logo()
             self._reset_calibration()
+            self._reset_tracking()
 
             self.video_canvas.video_fps = self._clip.fps
 
-            # Enable calibration button.
+            # Enable calibration button in case it hasn't been done yet.
             self.calibration_button['state'] = tk.NORMAL
+
+            self._reload_frame()
 
     def _reset_calibration(self):
         """Reset the calibration state."""
@@ -776,7 +782,7 @@ class AegearMainWindow(tk.Tk):
         fps = self._clip.fps if self._clip else 30
         current_frame_id = self._get_current_frame_number()
 
-        self.label['text'] = self._frame_to_time(float(current_frame_id), fps)
+        self.timeline_label['text'] = f"Time: {self._frame_to_time(float(current_frame_id), fps)}, Frame: {current_frame_id}/{self._num_frames}"
 
         # Determine overlay data
         calib_points = self._screen_points if self._calibration_running or (self._calibrated and not self._screen_points) else []
