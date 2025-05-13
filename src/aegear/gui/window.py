@@ -26,6 +26,7 @@ from aegear.video import VideoClip
 
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("data/calibration.xml")
+LOGO_FILE = resource_path("media/logo.png")
 HEATMAP_MODEL_PATH = resource_path("data/models/model_efficient_unet_2025-05-11.pth")
 SIAMESE_MODEL_PATH = resource_path("data/models/model_siamese_2025-05-12.pth")
 
@@ -87,7 +88,7 @@ class AegearMainWindow(tk.Tk):
 
 
         self._setup_main_ui_layout()
-        self._load_first_frame()
+        self._load_aegear_logo()
         self._setup_keypress_events()
         self._setup_image_mouse_events()
         self._create_menu()
@@ -283,6 +284,10 @@ class AegearMainWindow(tk.Tk):
         self._smooth_trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
 
     def _handle_canvas_left_click(self, mapped_coords, event):
+        if self._clip is None:
+            # If no video, don't interact.
+            return
+
         if self._calibration_running:
             if mapped_coords:
                 self._screen_points.append(mapped_coords)
@@ -296,6 +301,10 @@ class AegearMainWindow(tk.Tk):
             self.insert_tracking_point(current_frame, mapped_coords, 1.0)
 
     def _handle_canvas_right_click(self, mapped_coords, event):
+        if self._clip is None:
+            # If no video, don't interact.
+            return
+
         current_frame = self._get_current_frame_number()
         self.remove_tracking_point(current_frame)
     
@@ -586,7 +595,7 @@ class AegearMainWindow(tk.Tk):
 
             self.slider.config(to=self._num_frames)
             self.slider.set(0)
-            self._load_first_frame()
+            self._load_aegear_logo()
             self._reset_calibration()
 
             self.video_canvas.video_fps = self._clip.fps
@@ -682,8 +691,27 @@ class AegearMainWindow(tk.Tk):
         If calibrated, the frame is rectified.
         """
         if self._clip is None:
-            # return a black frame of 720p
+
             self._current_frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+            # Load logo PNG
+            logo_img = cv2.imread(resource_path("media/logo.png"), cv2.IMREAD_UNCHANGED)
+            if logo_img is not None:
+                logo_img = cv2.cvtColor(logo_img, cv2.COLOR_BGRA2RGBA)
+                h, w = logo_img.shape[:2]
+                bh, bw = self._current_frame.shape[:2]
+
+                x = (bw - w) // 2
+                y = (bh - h) // 2
+
+                overlay_rgb = logo_img[..., :3]
+                alpha_mask =logo_img[..., 3] / 255.0
+
+                roi = self._current_frame[y:y+h, x:x+w]
+
+                blended = (roi * (1 - alpha_mask[..., np.newaxis]) + overlay_rgb * alpha_mask[..., np.newaxis]).astype(np.uint8)
+                self._current_frame[y:y+h, x:x+w] = blended
+
             self._display_image = self._current_frame.copy()
             self.update_gui()
             return self._current_frame
@@ -779,11 +807,12 @@ class AegearMainWindow(tk.Tk):
         self._display_image = self._current_frame.copy()
         self.update_gui()
 
-    def _load_first_frame(self):
+    def _load_aegear_logo(self):
         """
         Load the first frame from the video.
         Also adjusts the tracking listbox height based on the frame size.
         """
+
         self._current_frame = self._read_frame(0)
         self._display_image = self._current_frame.copy()
         assert self._current_frame is not None, "Failed to load first frame."
