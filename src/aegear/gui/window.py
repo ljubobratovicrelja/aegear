@@ -414,8 +414,8 @@ class AegearMainWindow(tk.Tk):
 
     def _handle_canvas_left_click(self, mapped_coords, event):
         if self._clip is None:
-            # If no video, don't interact.
-            return
+            # If no video, simply upon click launch video loading.
+            return self._load_video()
 
         if self._calibration_running:
             if mapped_coords:
