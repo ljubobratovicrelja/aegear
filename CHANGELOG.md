@@ -2,11 +2,20 @@
 
 ## v0.3.0
 
--	Major rewrite of tracking pipeline: New adaptive frame-skipping tracker using heatmap + Siamese fusion, with robust background subtraction and confidence-based control. Tracking loop now fully decoupled and externally controlled via run_tracking().
--	GUI tracking overhaul: Replaced static loop with responsive UI integration and live progress feedback (ProgressReporter), exposing threshold controls and skip stride interactively.
--	Unified dataset system: Introduced DetectionDataset and restructured TrackingDataset with shared design, supporting data splits, augmentation, jitter, negatives, and Gaussian heatmaps.
--	Model architecture refinement: Removed unused decoder depth; simplified upsampling blocks using bilinear interpolation and batch norm; Siamese tracker now reuses encoder blocks and merges features more effectively.
--	Calibration update: Added precise point rectification method to support accurate coordinate mapping.
+
+- **Tracking Improvements**
+  -	Major rewrite of tracking pipeline: New adaptive frame-skipping tracking strategy,
+  - Both detection (UNet) and tracking (Siamese) got significant architecture and training boost, greatly outperforming the previous system.
+
+- **Training Systems**
+  -	Unified dataset system: Introduced DetectionDataset and restructured TrackingDataset with shared design, supporting data splits, augmentation, jitter, negatives, and Gaussian heatmaps.
+  - Removed contour based heatmap generation for UNet, using Gaussian instead. Relying on tracking data for training, bootstrapping previously trained tracking system for further training data mining.
+
+- **Aegear GUI**
+  - Main window layout updated: The interface is now organized with a clearer separation for the toolbox, video area, and data list. You can also resize these sections by dragging the dividers.
+  - Tracking data in a table: Tracked points are now shown in a table with columns for Frame, Centroid, and Confidence, which should make them easier to look through.
+  - Progress window for tracking: When you run the tracking process, a progress window will show up in the middle of the screen with status and ETA. The main window will be disabled until tracking finishes or you cancel it.
+
 
 ## v0.2.0
 
