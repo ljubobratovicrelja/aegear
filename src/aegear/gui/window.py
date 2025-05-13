@@ -157,7 +157,7 @@ class AegearMainWindow(tk.Tk):
         calib_frame = tk.LabelFrame(self.left_toolbox_frame, text="Calibration")
         calib_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
 
-        self.calibration_button = tk.Button(calib_frame, text="Calibrate", command=self._calibrate, fg="red")
+        self.calibration_button = tk.Button(calib_frame, text="Calibrate", command=self._calibrate, fg="red", state=tk.DISABLED)
         self.calibration_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
 
         track_control_frame = tk.LabelFrame(self.left_toolbox_frame, text="Tracking Control")
@@ -600,6 +600,9 @@ class AegearMainWindow(tk.Tk):
 
             self.video_canvas.video_fps = self._clip.fps
 
+            # Enable calibration button.
+            self.calibration_button['state'] = tk.NORMAL
+
     def _reset_calibration(self):
         """Reset the calibration state."""
         self._calibrated = False
@@ -692,7 +695,7 @@ class AegearMainWindow(tk.Tk):
         """
         if self._clip is None:
 
-            self._current_frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+            self._current_frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
 
             # Load logo PNG
             logo_img = cv2.imread(resource_path("media/logo.png"), cv2.IMREAD_UNCHANGED)
@@ -707,7 +710,7 @@ class AegearMainWindow(tk.Tk):
                 overlay_rgb = logo_img[..., :3]
                 alpha_mask =logo_img[..., 3] / 255.0
 
-                roi = self._current_frame[y:y+h, x:x+w]
+                roi = self._current_frame[y:y+h, x:x+w, :]
 
                 blended = (roi * (1 - alpha_mask[..., np.newaxis]) + overlay_rgb * alpha_mask[..., np.newaxis]).astype(np.uint8)
                 self._current_frame[y:y+h, x:x+w] = blended
