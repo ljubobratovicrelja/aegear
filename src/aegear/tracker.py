@@ -352,10 +352,7 @@ class FishTracker:
             # If we get an error, we just return None.
             return None
         
-        # Resize the output to the original window size.
-        output_r = interpolate(output, size=window.shape[0:2], mode='bilinear', align_corners=False)
-        
-        result = FishTracker._get_centroid(output_r)
+        result = FishTracker._get_centroid(output)
 
         if result is None:
             self._debug_print("Heatmap: No fish detected")
@@ -383,10 +380,7 @@ class FishTracker:
             # If we get an error, we just return None.
             return None
 
-        # Resize the output to the original window size.
-        output_r = interpolate(output, size=(self.WINDOW_SIZE, self.WINDOW_SIZE), mode='bilinear', align_corners=False)
-
-        result = FishTracker._get_centroid(output_r)
+        result = FishTracker._get_centroid(output)
 
         if result is None:
             self._debug_print("Siamese: No fish detected")
