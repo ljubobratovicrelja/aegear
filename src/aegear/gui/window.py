@@ -578,7 +578,6 @@ class AegearMainWindow(tk.Tk):
         """Load a new video file and reinitialize the video processing."""
         path = filedialog.askopenfilename()
         if path == "":
-            messagebox.showerror("Error", "No video selected.")
             return
 
         try:
