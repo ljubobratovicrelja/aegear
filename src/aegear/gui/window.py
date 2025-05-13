@@ -752,6 +752,11 @@ class AegearMainWindow(tk.Tk):
         calib_points = self._screen_points if self._calibration_running or (self._calibrated and not self._screen_points) else []
         track_point = self._fish_tracking.get(current_frame_id, [None])[0]
 
+        # Update the trajectory length and distance status bar.
+        if self._smooth_trajectory is not None:
+            travelDistance = trajectory_length(self._smooth_trajectory) * self._pixel_to_cm_ratio
+            self.distance_status_bar['text'] = "Distance: {} cm".format(travelDistance)
+
         # Update the data info for correct trajectory drawing about the frame.
         self.video_canvas.set_current_frame_id_for_trajectory(current_frame_id)
 
