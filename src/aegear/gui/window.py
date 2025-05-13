@@ -488,6 +488,7 @@ class AegearMainWindow(tk.Tk):
         """Reset all tracking markers and clear the tracking list."""
         self.track_bar.clear()
         self._fish_tracking = {}
+        self._smooth_trajectory = None
         self.tracking_listbox.delete(0, tk.END)
         self.update_gui()
 
@@ -580,17 +581,27 @@ class AegearMainWindow(tk.Tk):
             self._clip = None
 
         if self._clip is not None:
-            self._calibrated = False
-            self._calibration_running = False
             self._playing = False
             self._current_frame = None
-            self._screen_points = []
-            self._pixel_to_cm_ratio = 1.0
 
             self.slider.config(to=self._num_frames)
             self.slider.set(0)
             self._load_first_frame()
+            self._reset_calibration()
+
             self.video_canvas.video_fps = self._clip.fps
+
+    def _reset_calibration(self):
+        """Reset the calibration state."""
+        self._calibrated = False
+        self._calibration_running = False
+        self._pixel_to_cm_ratio = 1.0
+        self._screen_points = []
+        self.calibration_button['text'] = "Calibrate"
+        self.calibration_button['fg'] = "red"
+
+        # Rebind default mouse events.
+        self.update_gui()
 
     def _calibrate(self):
         """
@@ -604,11 +615,7 @@ class AegearMainWindow(tk.Tk):
             if messagebox.askokcancel("Calibration Cancel", "Are you sure you want to cancel calibration?"):
                 self.status_bar['text'] = "Calibration cancelled."
                 self.status_bar['fg'] = "red"
-                self._screen_points = []
-                self.calibration_button['text'] = "Calibrate"
-                self.calibration_button['fg'] = "red"
-                self._calibration_running = False
-                self._calibrated = False
+                self._reset_calibration()
 
                 # Rebind default mouse events.
                 self.update_gui()
