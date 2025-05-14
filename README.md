@@ -70,7 +70,7 @@ The current system integrates an EfficientUNet model built on EfficientNet-B0 (T
 ## 🚧 Known Limitations
 
 - Currently limited to **single-object tracking**; no support yet for multi-class or multi-fish tracking.
-- The detection model is specialized for Russian sturgeon and likely should be retrained for other species.
+- The detection model is trained on sterlet (*Acipenser ruthenus*) and Russian sturgeon (*Acipenser gueldenstaedtii*) video data and likely requires additional training for species with significantly different shapes or swimming patterns.
 
 ---
 
