@@ -89,7 +89,9 @@ class FishTracker:
 
         self.last_result = None
 
-        while anchor_frame < end_frame:
+        progress_still_running = lambda: progress_reporter is not None and progress_reporter.still_running()
+
+        while anchor_frame < end_frame and progress_still_running():
             candidate = anchor_frame + current_skip
             if candidate >= end_frame:
                 break
@@ -108,7 +110,7 @@ class FishTracker:
 
                 anchor_frame = candidate
 
-                if progress_reporter is not None and progress_reporter.still_running():
+                if progress_reporter is not None:
                     progress_reporter.update(anchor_frame)
 
                 if current_skip < self.tracking_max_skip:
