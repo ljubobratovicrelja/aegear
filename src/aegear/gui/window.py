@@ -306,10 +306,7 @@ class AegearMainWindow(tk.Tk):
 
     def _delete_current_tracked_frame(self):
         """Delete the currently tracked frame from the list."""
-        current_frame = self._get_current_frame_number()
-        if current_frame in self._fish_tracking:
-            self.remove_tracking_point(current_frame)
-        
+        self.remove_tracking_point(self._get_current_frame_number())
         self.update_smooth_trajectory()
         self._rebuild_tracking_treeview()
     
@@ -409,10 +406,19 @@ class AegearMainWindow(tk.Tk):
         self.tracking_tree.see(item_iid)
 
     def update_smooth_trajectory(self):
-        trajectory = np.array([ [t, coordinates[0], coordinates[1]] for t, (coordinates, _) in self._fish_tracking.items() ])
+        trajectory = []
+        for t in self._tracked_frames():
+            (x, y) = self._get_track_point(t)
+            trajectory.append([t, x, y])
+        
+        trajectory = np.array(trajectory)
         self._smooth_trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
 
     def _handle_canvas_left_click(self, mapped_coords, event):
+        if self._calibrated:
+            (x, y) = self._scene_calibration.unrectify_point(mapped_coords)
+            mapped_coords = (int(x), int(y))
+
         if self._clip is None:
             # If no video, simply upon click launch video loading.
             return self._load_video()
@@ -507,9 +513,9 @@ class AegearMainWindow(tk.Tk):
         """Insert a tracking point into the listbox."""
         self._fish_tracking[frame_id] = (coordinates, confidence)
         self.updated_sorted_tracked_frame_ids()
+        self.update_smooth_trajectory()
         self.track_bar.mark_processed(frame_id)
         self._register_tracking_to_ui(frame_id, coordinates, confidence)
-        self.update_smooth_trajectory()
         self.update_gui()
     
     def remove_tracking_point(self, frame_id):
@@ -609,7 +615,7 @@ class AegearMainWindow(tk.Tk):
     
     def _tracking_model_register(self, frame, centroid, confidence):
         """Register a tracking model for the current frame."""
-        (x, y) = self._scene_calibration.rectify_point(centroid)
+        (x, y) = centroid
         coordinates = (int(x), int(y))
         self._fish_tracking[frame] = (coordinates, confidence)
         self._register_tracking_to_ui(frame, coordinates, confidence)
@@ -659,9 +665,10 @@ class AegearMainWindow(tk.Tk):
 
         progress_reporter.close()
 
-        # Refresh helper data after tracking.
-        self.update_smooth_trajectory()
+        # Refresh helper data after tracking
+        # WARNING: Mind the order, smooth trajectory update requires sorted frame IDs.
         self.updated_sorted_tracked_frame_ids()
+        self.update_smooth_trajectory()
 
         # Redraw the current frame with the trajectory.
         self._current_frame = self._read_current_frame()
@@ -741,6 +748,7 @@ class AegearMainWindow(tk.Tk):
             "tracking": []
         }
 
+        # Note that we store the raw coordinate before calibration, so that the calibration can be reapplied later.
         for frame_id, (coordinates, confidence) in self._fish_tracking.items():
             file_dict["tracking"].append({
                 "frame_id": frame_id,
@@ -826,11 +834,12 @@ class AegearMainWindow(tk.Tk):
         self._calibrated = False
         self._calibration_running = True
         self._screen_points = []
-        self.update_gui()
         self.status_bar['text'] = "Calibration started - left click to select corner points of the scene."
         self.status_bar['fg'] = "orange"
         self.calibration_button['text'] = "Cancel Calibration"
         self.calibration_button['fg'] = "purple"
+
+        self.update_gui()
 
     def _do_calibration(self):
         """
@@ -857,6 +866,9 @@ class AegearMainWindow(tk.Tk):
             self.calibration_button['fg'] = "red"
 
         self._screen_points = []
+
+        self.updated_sorted_tracked_frame_ids()
+        self.update_smooth_trajectory()
 
         self._reload_frame()
         self.update_gui()
@@ -958,6 +970,33 @@ class AegearMainWindow(tk.Tk):
         while self._playing:
             time.sleep(0.5 / self._clip.fps)
             self.after(1, self.next_frame)
+    
+    def _tracked_frames(self):
+        """
+        Get the tracked frames from the tracking data.
+        Returns a list of frame IDs that have tracking data.
+        """
+        yield from self._sorted_tracked_frame_ids
+    
+    def _get_track_point(self, frame_id):
+        """
+        Get the tracking point for a specific frame, with calibration applied if any.
+        Returns None if no tracking data is available for that frame.
+        """
+        if frame_id in self._fish_tracking:
+            point = self._fish_tracking[frame_id][0]
+            if self._calibrated:
+                point = self._scene_calibration.rectify_point(point)
+            return point
+        return None
+    
+    def _get_current_track_point(self):
+        """
+        Get the tracking point for the current frame.
+        Returns None if no tracking data is available for that frame.
+        """
+        current_frame_id = self._get_current_frame_number()
+        return self._get_track_point(current_frame_id)
 
     def update_gui(self):
         """
@@ -976,7 +1015,7 @@ class AegearMainWindow(tk.Tk):
 
         # Determine overlay data
         calib_points = self._screen_points if self._calibration_running or (self._calibrated and not self._screen_points) else []
-        track_point = self._fish_tracking.get(current_frame_id, [None])[0]
+        track_point = self._get_current_track_point()
 
         # Update the trajectory length and distance status bar.
         if self._smooth_trajectory is not None:

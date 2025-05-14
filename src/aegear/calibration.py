@@ -173,3 +173,28 @@ class SceneCalibration:
         )[0, 0]
 
         return tuple(rectified_pt)
+
+    def unrectify_point(self, point: tuple[float, float]) -> tuple[float, float]:
+        """
+        Map a point from the rectified image back to its original (distorted) image coordinates.
+        """
+        assert self._perspectiveTransform is not None, "Need to calibrate first"
+
+        # 1. undo the perspective warp
+        inv_T = np.linalg.inv(self._perspectiveTransform)
+        pt = np.array([point[0], point[1], 1.0], dtype=np.float32)
+        undist_h = inv_T.dot(pt)
+        undist_px = undist_h[:2] / undist_h[2]
+
+        # 2. convert back to normalized camera coords
+        inv_mtx = np.linalg.inv(self.mtx)
+        uv1 = np.array([undist_px[0], undist_px[1], 1.0], dtype=np.float32)
+        norm = inv_mtx.dot(uv1).reshape(1, 3)
+
+        # 3. project through intrinsics+distortion to get the original pixel
+        rvec = np.zeros(3, dtype=np.float32)
+        tvec = np.zeros(3, dtype=np.float32)
+        img_pts, _ = cv2.projectPoints(norm, rvec, tvec, self.mtx, self.dist)
+        x, y = img_pts[0, 0]
+
+        return (float(x), float(y))
