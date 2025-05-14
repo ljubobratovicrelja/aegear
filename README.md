@@ -65,8 +65,6 @@ The current system integrates an EfficientUNet model built on EfficientNet-B0 (T
 > Fully-Convolutional Siamese Networks for Object Tracking.
 > European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549
 
-Since that initial application, Aegear has significantly expanded in scope. The pipeline has undergone several architectural revisions, added support tools (e.g., dataset generation, synthetic augmentation, calibration), and now includes predictive motion modeling via temporal networks. Aegear is an actively evolving project aimed at providing a generalizable, modular framework for aquatic behavioral analysis, with open-ended support for future enhancements and applications beyond the original sturgeon experiments.
-
 ---
 
 ## 🚧 Known Limitations
