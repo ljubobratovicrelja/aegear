@@ -33,6 +33,24 @@ class VideoClip:
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         return frame
+    
+    def get_frame_width(self):
+        """
+        Return the width of the video frames.
+        """
+        return int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    
+    def get_frame_height(self):
+        """
+        Return the height of the video frames.
+        """
+        return int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    def get_frame_shape(self):
+        """
+        Return the shape of the video frames.
+        """
+        return (self.get_frame_height(), self.get_frame_width(), 3)
 
     def release(self):
         self._cap.release()
