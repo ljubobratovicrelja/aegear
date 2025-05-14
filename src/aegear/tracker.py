@@ -74,7 +74,13 @@ class FishTracker:
         self.history = []
         self.frame_size = None
     
-    def run_tracking(self, video: VideoClip, start_frame: int, end_frame: int, progress_reporter: ProgressReporter, model_track_register, ui_update):
+    def run_tracking(self,
+                     video: VideoClip,
+                     start_frame: int,
+                     end_frame: int,
+                     model_track_register,
+                     progress_reporter: Optional[ProgressReporter]=None,
+                     ui_update=None):
         """Run the tracking on a video."""
       
         bgs = self._init_background_subtractor(video, start_frame)
@@ -83,7 +89,7 @@ class FishTracker:
 
         self.last_result = None
 
-        while anchor_frame < end_frame and progress_reporter.still_running():
+        while anchor_frame < end_frame:
             candidate = anchor_frame + current_skip
             if candidate >= end_frame:
                 break
@@ -101,7 +107,9 @@ class FishTracker:
                 model_track_register(candidate, result.centroid, result.confidence)
 
                 anchor_frame = candidate
-                progress_reporter.update(anchor_frame)
+
+                if progress_reporter is not None and progress_reporter.still_running():
+                    progress_reporter.update(anchor_frame)
 
                 if current_skip < self.tracking_max_skip:
                     current_skip = min(current_skip * 2, self.tracking_max_skip)
@@ -113,7 +121,8 @@ class FishTracker:
                 anchor_frame = candidate
                 self.last_result = None
 
-            ui_update(anchor_frame)
+            if ui_update is not None:
+                ui_update(anchor_frame)
 
     def _select_device():
         """Select the device - try CUDA, if fails, try mps for Apple Silicon, else CPU."""

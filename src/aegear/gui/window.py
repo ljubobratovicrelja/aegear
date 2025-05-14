@@ -649,8 +649,8 @@ class AegearMainWindow(tk.Tk):
                 self._clip,
                 start_frame,
                 end_frame,
-                progress_reporter=progress_reporter,
                 model_track_register=self._tracking_model_register,
+                progress_reporter=progress_reporter,
                 ui_update=self._tracking_ui_update)
         except Exception as e:
             messagebox.showerror("Error", f"Tracking failed: {e}")
