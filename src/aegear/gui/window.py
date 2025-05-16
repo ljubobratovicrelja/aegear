@@ -1,3 +1,4 @@
+import os
 import json
 import threading
 import time
@@ -206,6 +207,26 @@ class AegearMainWindow(tk.Tk):
         self.prev_outlier_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,2))
         self.next_outlier_button = tk.Button(nav_outlier_frame, text="Next Outlier", command=self._goto_next_outlier)
         self.next_outlier_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2,0))
+
+        # --- Video Information section ---
+        video_info_frame = tk.LabelFrame(self.left_toolbox_frame, text="Video Information")
+        video_info_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
+        self.video_info_labels = {}
+        info_fields = [
+            ("Filename", "filename"),
+            ("FPS", "fps"),
+            ("Resolution", "resolution"),
+            ("Length (s)", "length"),
+            ("Frames", "frames"),
+        ]
+        for label, key in info_fields:
+            row = tk.Frame(video_info_frame)
+            row.pack(side=tk.TOP, fill=tk.X, expand=False, pady=1, padx=2)
+            tk.Label(row, text=label+":", anchor=tk.W, width=12).pack(side=tk.LEFT)
+            val_label = tk.Label(row, text="-", anchor=tk.W)
+            val_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            self.video_info_labels[key] = val_label
+        self._update_video_info()
 
         track_params_frame = tk.LabelFrame(self.left_toolbox_frame, text="Parameters")
         track_params_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
@@ -717,6 +738,7 @@ class AegearMainWindow(tk.Tk):
         self._fish_tracking = {}
         self._sorted_tracked_frame_ids = []
         self.tracking_tree.delete(*self.tracking_tree.get_children())
+        self._update_video_info()
         self.update_gui()
 
     def _about(self):
@@ -824,6 +846,7 @@ class AegearMainWindow(tk.Tk):
             self.calibration_button['state'] = tk.NORMAL
 
             self._reload_frame()
+            self._update_video_info()
 
     def _reset_calibration(self):
         """Reset the calibration state."""
@@ -1190,3 +1213,29 @@ class AegearMainWindow(tk.Tk):
         # If none found, wrap to last
         self._set_frame(outlier_ids[-1])
         self._update_treeview_selection(outlier_ids[-1])
+
+    def _update_video_info(self):
+        """Update the video information section with current video info."""
+        if self._clip is not None:
+            filename = getattr(self._clip, 'path', '-')
+            fps = getattr(self._clip, 'fps', '-')
+            width = getattr(self._clip, 'width', None)
+            height = getattr(self._clip, 'height', None)
+            if width is None or height is None:
+                # Try to get from first frame
+                try:
+                    frame0 = self._clip.get_frame(0)
+                    height, width = frame0.shape[:2]
+                except Exception:
+                    width = height = '-'
+            resolution = f"{width} x {height}" if width != '-' and height != '-' else '-'
+            frames = int(self._clip.duration * self._clip.fps) if self._clip.duration and self._clip.fps else '-'
+            length = self._frame_to_time(frames, fps)
+        else:
+            filename = fps = resolution = length = frames = '-'
+        
+        self.video_info_labels["filename"].config(text=str(os.path.basename(filename)))
+        self.video_info_labels["fps"].config(text=str(fps))
+        self.video_info_labels["resolution"].config(text=str(resolution))
+        self.video_info_labels["length"].config(text=str(length))
+        self.video_info_labels["frames"].config(text=str(frames))
