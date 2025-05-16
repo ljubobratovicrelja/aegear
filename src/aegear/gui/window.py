@@ -988,6 +988,39 @@ class AegearMainWindow(tk.Tk):
             return float(np.sum(distances) * self._pixel_to_cm_ratio)
         return 0.0
 
+    def _compute_trajectory_overlay(
+        self,
+        current_frame_id: int,
+        fps: float
+    ) -> list[list[int]] | None:
+        """
+        Compute the smoothed trajectory overlay for the current frame window.
+        Returns a list of [frame_id, x, y] or None if not to be drawn or not enough points.
+        """
+        window_seconds = self.video_canvas.trajectory_fade_seconds if hasattr(self, 'video_canvas') else 3.0
+        window_frames = int(round(window_seconds * fps))
+        all_traj = []
+        for t in self._tracked_frames():
+            pt = self._get_track_point(t)
+            if pt is not None:
+                x, y = pt
+                all_traj.append([t, x, y])
+        # Require at least 2 points to draw a trajectory
+        if len(all_traj) < 2:
+            return None
+        time_stamps = [p[0] for p in all_traj]
+        t_min = current_frame_id - window_frames
+        start_idx = bisect.bisect_left(time_stamps, t_min)
+        window_chunk = all_traj[start_idx:]
+        if len(window_chunk) >= self._trajectory_smooth_size:
+            smoothed_chunk = smooth_trajectory(window_chunk, self._trajectory_smooth_size)
+        else:
+            smoothed_chunk = window_chunk
+        # Still require at least 2 points in the visible chunk
+        if not (self._draw_trajectory.get() and smoothed_chunk and len(smoothed_chunk) >= 2):
+            return None
+        return smoothed_chunk
+
     def update_gui(self) -> None:
         """
         Update the image display and the time label based on the current frame.
@@ -1006,29 +1039,9 @@ class AegearMainWindow(tk.Tk):
         calib_points = self._screen_points if self._calibration_running or (self._calibrated and not self._screen_points) else []
         track_point = self._get_current_track_point()
 
-        # --- Compute local window for trajectory smoothing/drawing ---
-        # Only smooth and draw the visible chunk (last N seconds/frames)
-        window_seconds = self.video_canvas.trajectory_fade_seconds if hasattr(self, 'video_canvas') else 3.0
-        window_frames = int(round(window_seconds * fps))
-        all_traj = []
-        for t in self._tracked_frames():
-            pt = self._get_track_point(t)
-            if pt is not None:
-                x, y = pt
-                all_traj.append([t, x, y])
-        if all_traj:
-            # Find the start index for the window
-            time_stamps = [p[0] for p in all_traj]
-            t_min = current_frame_id - window_frames
-            start_idx = bisect.bisect_left(time_stamps, t_min)
-            window_chunk = all_traj[start_idx:]
-            # Only smooth if enough points
-            if len(window_chunk) >= self._trajectory_smooth_size:
-                smoothed_chunk = smooth_trajectory(window_chunk, self._trajectory_smooth_size)
-            else:
-                smoothed_chunk = window_chunk
-        else:
-            smoothed_chunk = []
+        # Compute trajectory overlay using helper
+        trajectory_overlay = self._compute_trajectory_overlay(current_frame_id, fps)
+        self.video_canvas.set_trajectory_overlay(trajectory_overlay)
 
         # Update the trajectory length and distance status bar (use all points, not just window)
         travel_distance = self._compute_travel_distance()
@@ -1040,9 +1053,6 @@ class AegearMainWindow(tk.Tk):
         # Set overlays on canvas
         self.video_canvas.set_calibration_points_overlay(calib_points)
         self.video_canvas.set_tracked_point_overlay(track_point)
-
-        trajectory_overlay = smoothed_chunk if (self._draw_trajectory.get() and smoothed_chunk) else None
-        self.video_canvas.set_trajectory_overlay(trajectory_overlay)
 
         # Set the main image (this triggers redraw including overlays)
         self.video_canvas.set_image(self._current_frame)

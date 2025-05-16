@@ -9,17 +9,22 @@ import numpy as np
 from scipy.signal import savgol_filter
 
 
-def smooth_trajectory(trajectory: list[tuple[int, int, int]], filterSize: int = 15) -> list[tuple[int, int]]:
+def smooth_trajectory(trajectory: list[tuple[int, int, int]], filterSize: int = 15) -> list[tuple[int, int, int]]:
     """
     Apply Savitzky-Golay filter to smooth a trajectory.
 
     Parameters:
         trajectory (list of (t, x, y)): Frame id with raw trajectory points.
-        filterSize (int): Window size for filtering (must be odd).
+        filterSize (int): Window size for filtering (must be odd and >= 5).
 
     Returns:
         list of (t, x, y): Smoothed trajectory points.
     """
+    # Ensure filterSize is odd and at least 5 (polyorder=3, so min window=5)
+    if filterSize < 5:
+        filterSize = 5
+    if filterSize % 2 == 0:
+        filterSize += 1
     if len(trajectory) < filterSize:
         return trajectory
 
