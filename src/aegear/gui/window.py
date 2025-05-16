@@ -340,39 +340,65 @@ class AegearMainWindow(tk.Tk):
         return (frame_val_str, centroid_val_str, conf_val_str)
 
 
-    def _register_tracking_to_ui(self, frame_id, coordinates, confidence):
+    def _register_tracking_to_ui(self, frame_id: int, coordinates: tuple[int, int], confidence: float) -> None:
         """
         Registers or updates a tracking point in the UI's Treeview.
         If frame_id exists, it updates the item.
         If not, it inserts the new item in an order sorted by frame_id.
+        Optimized: If frame_id is greater than all current IDs, insert at the end; if less than all, insert at the beginning; otherwise, use bisect.
         """
-        item_iid = str(frame_id) # Use the string representation of frame_id as the Item ID
-        
+        item_iid = str(frame_id)
         item_values = self._format_treeview_values(frame_id, coordinates, confidence)
 
         if self.tracking_tree.exists(item_iid):
             self.tracking_tree.item(item_iid, values=item_values)
         else:
             all_current_iids_str = self.tracking_tree.get_children('')
-            
-            current_frame_ids_in_tree = []
-            for iid_str in all_current_iids_str:
+            if all_current_iids_str:
                 try:
-                    current_frame_ids_in_tree.append(int(iid_str))
+                    frame_ids = [int(iid) for iid in all_current_iids_str]
                 except ValueError:
-                    # TODO: figure out how to report errors the right way...
-                    print(f"WARNING: Non-integer IID '{iid_str}' encountered in Treeview during sort.")
-            
-            current_frame_ids_in_tree.sort()
-            insertion_index_in_sorted_list = bisect.bisect_left(current_frame_ids_in_tree, frame_id)
-            
-            self.tracking_tree.insert(
-                parent='',
-                index=insertion_index_in_sorted_list,
-                iid=item_iid,
-                values=item_values
-            )
-
+                    frame_ids = []
+                if frame_ids:
+                    min_id = min(frame_ids)
+                    max_id = max(frame_ids)
+                    if frame_id > max_id:
+                        # Fast path: append at the end
+                        self.tracking_tree.insert(
+                            parent='',
+                            index='end',
+                            iid=item_iid,
+                            values=item_values
+                        )
+                        self.tracking_tree.see(item_iid)
+                        return
+                    elif frame_id < min_id:
+                        # Fast path: insert at the beginning
+                        self.tracking_tree.insert(
+                            parent='',
+                            index=0,
+                            iid=item_iid,
+                            values=item_values
+                        )
+                        self.tracking_tree.see(item_iid)
+                        return
+                # Otherwise, do the bisect/insert as before
+                frame_ids.sort()
+                insertion_index_in_sorted_list = bisect.bisect_left(frame_ids, frame_id)
+                self.tracking_tree.insert(
+                    parent='',
+                    index=insertion_index_in_sorted_list,
+                    iid=item_iid,
+                    values=item_values
+                )
+            else:
+                # Tree is empty, just insert
+                self.tracking_tree.insert(
+                    parent='',
+                    index=0,
+                    iid=item_iid,
+                    values=item_values
+                )
         self.tracking_tree.see(item_iid)
 
     def _handle_canvas_left_click(self, mapped_coords, event):
@@ -573,9 +599,6 @@ class AegearMainWindow(tk.Tk):
         (x, y) = centroid
         coordinates = (int(x), int(y))
         self._fish_tracking[frame] = (coordinates, confidence)
-        self._register_tracking_to_ui(frame, coordinates, confidence)
-        self.track_bar.mark_processed(frame)
-        self.update_gui()
     
     def _tracking_ui_update(self, frame):
         """Update the UI with the current frame."""
@@ -622,6 +645,12 @@ class AegearMainWindow(tk.Tk):
 
         # Refresh helper data after tracking
         self.updated_sorted_tracked_frame_ids()
+
+        for frame, (coordinates, confidence) in self._fish_tracking.items():
+            self._register_tracking_to_ui(frame, coordinates, confidence)
+            self.track_bar.mark_processed(frame)
+
+        self.update_gui()
 
         # Redraw the current frame with the trajectory.
         self._current_frame = self._read_current_frame()
