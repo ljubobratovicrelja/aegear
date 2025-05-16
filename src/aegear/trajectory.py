@@ -35,3 +35,42 @@ def smooth_trajectory(trajectory: list[tuple[int, int, int]], filterSize: int = 
 
     smoothed = list(zip(t.astype(int), x.astype(int), y.astype(int)))
     return smoothed
+
+
+def detect_trajectory_outliers(
+    trajectory: list[tuple[int, int, int]],
+    threshold: float = 3.0,
+    window: int = 5
+) -> list[int]:
+    """
+    Detect outlier frames in a trajectory based on local standard deviation.
+    For each point, if its distance from the local mean (in a window) exceeds
+    threshold * local std, it is considered an outlier.
+
+    Parameters:
+        trajectory: list of (frame, x, y)
+        threshold: float, number of std deviations to consider as outlier
+        window: int, size of the local window (must be odd, default 5)
+    Returns:
+        List of frame indices (ints) that are outliers.
+    """
+    if len(trajectory) < window or window < 3:
+        return []
+    if window % 2 == 0:
+        window += 1
+    half = window // 2
+    traj_arr = np.array(trajectory)
+    outlier_frames = []
+    for i in range(len(traj_arr)):
+        start = max(0, i - half)
+        end = min(len(traj_arr), i + half + 1)
+        local = traj_arr[start:end, 1:3]  # x, y only
+        if len(local) < 3:
+            continue
+        mean = np.mean(local, axis=0)
+        std = np.std(local, axis=0)
+        dist = np.linalg.norm(traj_arr[i, 1:3] - mean)
+        std_total = np.linalg.norm(std)
+        if std_total > 0 and dist > threshold * std_total:
+            outlier_frames.append(int(traj_arr[i, 0]))
+    return outlier_frames

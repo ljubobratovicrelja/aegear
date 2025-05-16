@@ -15,7 +15,7 @@ import tkinter.filedialog as filedialog
 
 # Internal modules
 from aegear.calibration import SceneCalibration
-from aegear.trajectory import smooth_trajectory
+from aegear.trajectory import smooth_trajectory, detect_trajectory_outliers
 from aegear.tracker import FishTracker
 
 from aegear.gui.tracking_bar import TrackingBar
@@ -174,6 +174,41 @@ class AegearMainWindow(tk.Tk):
 
         self.reset_tracking_button = tk.Button(track_control_frame, text="Reset Tracking", command=self._reset_tracking)
         self.reset_tracking_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
+        # --- Cleanup tools section ---
+        cleanup_frame = tk.LabelFrame(self.left_toolbox_frame, text="Cleanup")
+        cleanup_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
+
+        self.highlight_outliers_button = tk.Button(
+            cleanup_frame,
+            text="Highlight Outliers",
+            command=self._highlight_outliers,
+            state=tk.NORMAL
+        )
+        self.highlight_outliers_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
+        self.outlier_threshold_scale = tk.Scale(
+            cleanup_frame,
+            from_=1,
+            to=100,
+            orient=tk.HORIZONTAL,
+            resolution=0.1,
+            label="Outlier Threshold",
+        )
+        self.outlier_threshold_scale.set(10.0)
+        self.outlier_threshold_scale.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
+        self.outlier_window_scale = tk.Scale(
+            cleanup_frame,
+            from_=3,
+            to=21,
+            orient=tk.HORIZONTAL,
+            resolution=2,
+            label="Outlier Window Size",
+        )
+
+        self.outlier_window_scale.set(5)
+        self.outlier_window_scale.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
 
         track_params_frame = tk.LabelFrame(self.left_toolbox_frame, text="Parameters")
         track_params_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
@@ -1079,3 +1114,35 @@ class AegearMainWindow(tk.Tk):
         minutes = int((total_seconds % 3600) // 60)
         seconds = int(total_seconds % 60)
         return "{:02}:{:02}:{:02}".format(hours, minutes, seconds)
+
+    def _highlight_outliers(self):
+        """
+        Run outlier detection on the trajectory and select outlier frames in the Treeview.
+        """
+
+        # Prepare trajectory as list of (frame, x, y)
+        trajectory = [
+            (frame_id, coords[0][0], coords[0][1])
+            for frame_id, coords in self._fish_tracking.items()
+            if isinstance(coords, tuple) and len(coords) > 0 and isinstance(coords[0], (tuple, list)) and len(coords[0]) == 2
+        ]
+        if len(trajectory) < 3:
+            messagebox.showinfo("Highlight Outliers", "Not enough tracking points to detect outliers.")
+            return
+        threshold = float(self.outlier_threshold_scale.get())
+        window = int(self.outlier_window_scale.get())
+        if window % 2 == 0:
+            window += 1
+        outlier_frames = detect_trajectory_outliers(trajectory, threshold=threshold, window=window)
+        if not outlier_frames:
+            messagebox.showinfo("Highlight Outliers", "No outliers detected with current settings.")
+            return
+        # Select outlier frames in the Treeview
+        self.tracking_tree.selection_remove(self.tracking_tree.selection())
+        for frame_id in outlier_frames:
+            iid = str(frame_id)
+            if self.tracking_tree.exists(iid):
+                self.tracking_tree.selection_add(iid)
+                self.tracking_tree.see(iid)
+
+        messagebox.showinfo("Highlight Outliers", f"Highlighted {len(outlier_frames)} outlier(s). You can now press Delete to remove them.")
