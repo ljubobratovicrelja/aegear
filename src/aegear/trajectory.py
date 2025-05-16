@@ -40,44 +40,32 @@ def smooth_trajectory(trajectory: list[tuple[int, int, int]], filterSize: int = 
 
 def detect_trajectory_outliers(
     trajectory: list[tuple[int, int, int]],
-    threshold: float = 3.0,
-    window: int = 5
+    threshold: float = 20.0  # distance in pixels per frame
 ) -> list[int]:
     """
-    Vectorized outlier detection using rolling median and MAD.
+    Detects large jumps in pixel space, indicating likely tracking failures.
 
     Args:
         trajectory: List of (frame_idx, x, y) tuples.
-        threshold: Z-score threshold for MAD.
-        window: Half-window size for rolling stats.
+        threshold: Maximum allowed pixel movement per frame.
 
     Returns:
-        List of frame indices marked as outliers.
+        List of frame indices where jump exceeds threshold.
     """
-    if len(trajectory) < 2 * window + 1:
+    if len(trajectory) < 2:
         return []
 
     frame_idx, xs, ys = zip(*trajectory)
     xs = np.array(xs)
     ys = np.array(ys)
-    n = len(xs)
+    frame_idx = np.array(frame_idx)
 
-    # Create sliding windows over x and y
-    x_windows = sliding_window_view(xs, 2 * window + 1)
-    y_windows = sliding_window_view(ys, 2 * window + 1)
+    dx = np.diff(xs)
+    dy = np.diff(ys)
+    dist = np.sqrt(dx**2 + dy**2)
 
-    # Medians and MADs
-    x_medians = np.median(x_windows, axis=1)
-    y_medians = np.median(y_windows, axis=1)
-    x_mads = np.median(np.abs(x_windows - x_medians[:, None]), axis=1) + 1e-6
-    y_mads = np.median(np.abs(y_windows - y_medians[:, None]), axis=1) + 1e-6
+    # Mark current frame if jump from previous is too large
+    outlier_mask = dist > threshold
+    outlier_frames = frame_idx[1:][outlier_mask]  # current frame that made the jump
 
-    # Compute Z-scores for center points
-    center_indices = np.arange(window, n - window)
-    x_center = xs[center_indices]
-    y_center = ys[center_indices]
-    z_x = np.abs(x_center - x_medians) / x_mads
-    z_y = np.abs(y_center - y_medians) / y_mads
-
-    outliers = (z_x > threshold) | (z_y > threshold)
-    return list(np.array(frame_idx)[center_indices[outliers]])
+    return list(outlier_frames)

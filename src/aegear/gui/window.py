@@ -62,6 +62,7 @@ class AegearMainWindow(tk.Tk):
         self._first_frame_position = None
         self._fish_tracking = {}
         self._sorted_tracked_frame_ids = []
+        self._outlier_frames = []
         self._trajectory_smooth_size = 5
         self._screen_points = []
         self._num_frames = 100
@@ -198,17 +199,13 @@ class AegearMainWindow(tk.Tk):
         self.outlier_threshold_scale.set(10.0)
         self.outlier_threshold_scale.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
 
-        self.outlier_window_scale = tk.Scale(
-            cleanup_frame,
-            from_=3,
-            to=21,
-            orient=tk.HORIZONTAL,
-            resolution=2,
-            label="Outlier Window Size",
-        )
+        nav_outlier_frame = tk.Frame(cleanup_frame)
+        nav_outlier_frame.pack(side=tk.TOP, fill=tk.X, expand=False, pady=2, padx=5)
 
-        self.outlier_window_scale.set(5)
-        self.outlier_window_scale.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+        self.prev_outlier_button = tk.Button(nav_outlier_frame, text="Previous Outlier", command=self._goto_previous_outlier)
+        self.prev_outlier_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0,2))
+        self.next_outlier_button = tk.Button(nav_outlier_frame, text="Next Outlier", command=self._goto_next_outlier)
+        self.next_outlier_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2,0))
 
         track_params_frame = tk.LabelFrame(self.left_toolbox_frame, text="Parameters")
         track_params_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
@@ -249,6 +246,10 @@ class AegearMainWindow(tk.Tk):
         style = ttk.Style(self)
         style.configure("Custom.Treeview", font=self._tree_font, rowheight=int(self._tree_font[1] * 1.5))
         style.configure("Custom.Treeview.Heading", font=(self._tree_font[0], self._tree_font[1], 'bold'))
+        # Add outlier row style (yellow background)
+        style.map("Outlier.Treeview",
+                  background=[('selected', '#ffe066'), ('!selected', '#fff9c4')])
+        style.configure("Outlier.Treeview", background="#fff9c4")
 
         self.tracking_tree = ttk.Treeview(
             self.right_listbox_frame,
@@ -287,6 +288,9 @@ class AegearMainWindow(tk.Tk):
 
         self.tracking_tree.bind('<<TreeviewSelect>>', self._treeview_item_selected)
         self.tracking_tree.bind('<Delete>', self._treeview_item_deleted) # Or handle deletion differently
+
+        # Tag config for outlier rows
+        self.tracking_tree.tag_configure('outlier', background='#fff9c4')
 
         # Bottom controls - track bar and timeline navigation.
         video_controls_frame = tk.Frame(self.bottom_controls_frame)
@@ -344,20 +348,21 @@ class AegearMainWindow(tk.Tk):
         self.remove_tracking_point(self._get_current_frame_number())
 
     def _rebuild_tracking_treeview(self):
-        """Rebuild the tracking listbox from the current fish tracking data, optimized for large datasets."""
         self.tracking_tree.delete(*self.tracking_tree.get_children())
-        # Prepare all items in sorted order
         sorted_items = sorted(self._fish_tracking.items())
         treeview_values = [self._format_treeview_values(frame_id, coordinates, confidence)
                            for frame_id, (coordinates, confidence) in sorted_items]
-        # Insert all items in one pass
         for idx, (frame_id, (coordinates, confidence)) in enumerate(sorted_items):
             item_iid = str(frame_id)
+            tags = ()
+            if frame_id in self._outlier_frames:
+                tags = ('outlier',)
             self.tracking_tree.insert(
                 parent='',
                 index=idx,
                 iid=item_iid,
-                values=treeview_values[idx]
+                values=treeview_values[idx],
+                tags=tags
             )
         self.update_gui()
 
@@ -385,8 +390,11 @@ class AegearMainWindow(tk.Tk):
         item_iid = str(frame_id)
         item_values = self._format_treeview_values(frame_id, coordinates, confidence)
 
+        tags = ()
+        if frame_id in self._outlier_frames:
+            tags = ('outlier',)
         if self.tracking_tree.exists(item_iid):
-            self.tracking_tree.item(item_iid, values=item_values)
+            self.tracking_tree.item(item_iid, values=item_values, tags=tags)
         else:
             all_current_iids_str = self.tracking_tree.get_children('')
             if all_current_iids_str:
@@ -424,7 +432,8 @@ class AegearMainWindow(tk.Tk):
                     parent='',
                     index=insertion_index_in_sorted_list,
                     iid=item_iid,
-                    values=item_values
+                    values=item_values,
+                    tags=tags
                 )
             else:
                 # Tree is empty, just insert
@@ -432,7 +441,8 @@ class AegearMainWindow(tk.Tk):
                     parent='',
                     index=0,
                     iid=item_iid,
-                    values=item_values
+                    values=item_values,
+                    tags=tags
                 )
         self.tracking_tree.see(item_iid)
 
@@ -1117,7 +1127,7 @@ class AegearMainWindow(tk.Tk):
 
     def _highlight_outliers(self):
         """
-        Run outlier detection on the trajectory and select outlier frames in the Treeview.
+        Run outlier detection on the trajectory and highlight outlier frames in the Treeview.
         """
 
         # Prepare trajectory as list of (frame, x, y)
@@ -1131,22 +1141,52 @@ class AegearMainWindow(tk.Tk):
             return
 
         threshold = float(self.outlier_threshold_scale.get())
-        window = int(self.outlier_window_scale.get())
 
-        if window % 2 == 0:
-            window += 1
-        outlier_frames = detect_trajectory_outliers(trajectory, threshold=threshold, window=window)
+        outlier_frames = detect_trajectory_outliers(trajectory, threshold)
+
+        self._outlier_frames = set(outlier_frames)
+
+        # Update tags for all items
+        for frame_id in self._fish_tracking:
+            iid = str(frame_id)
+            tags = ()
+            if frame_id in self._outlier_frames:
+                tags = ('outlier',)
+            if self.tracking_tree.exists(iid):
+                self.tracking_tree.item(iid, tags=tags)
 
         if not outlier_frames:
             messagebox.showinfo("Highlight Outliers", "No outliers detected with current settings.")
             return
 
-        # Select outlier frames in the Treeview
-        self.tracking_tree.selection_remove(self.tracking_tree.selection())
-        for frame_id in outlier_frames:
-            iid = str(frame_id)
-            if self.tracking_tree.exists(iid):
-                self.tracking_tree.selection_add(iid)
-                self.tracking_tree.see(iid)
+        messagebox.showinfo("Highlight Outliers", f"Highlighted {len(outlier_frames)} outlier(s) in yellow.")
 
-        messagebox.showinfo("Highlight Outliers", f"Highlighted {len(outlier_frames)} outlier(s). You can now press Delete to remove them.")
+    def _goto_next_outlier(self):
+        """Go to the next outlier frame after the current frame."""
+        if not self._outlier_frames:
+            return
+        current_frame = self._get_current_frame_number()
+        outlier_ids = sorted(self._outlier_frames)
+        for frame_id in outlier_ids:
+            if frame_id > current_frame:
+                self._set_frame(frame_id)
+                self._update_treeview_selection(frame_id)
+                return
+        # If none found, wrap to first
+        self._set_frame(outlier_ids[0])
+        self._update_treeview_selection(outlier_ids[0])
+
+    def _goto_previous_outlier(self):
+        """Go to the previous outlier frame before the current frame."""
+        if not self._outlier_frames:
+            return
+        current_frame = self._get_current_frame_number()
+        outlier_ids = sorted(self._outlier_frames)
+        for frame_id in reversed(outlier_ids):
+            if frame_id < current_frame:
+                self._set_frame(frame_id)
+                self._update_treeview_selection(frame_id)
+                return
+        # If none found, wrap to last
+        self._set_frame(outlier_ids[-1])
+        self._update_treeview_selection(outlier_ids[-1])
