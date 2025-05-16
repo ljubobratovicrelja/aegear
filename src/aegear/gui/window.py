@@ -326,46 +326,7 @@ class AegearMainWindow(tk.Tk):
             )
         self.update_gui()
 
-    def _format_listbox_entry(self, frame_id, coordinates, confidence):
-        """Formats tracking data for display in the listbox, aligned with headers."""
-        frame_w = self._listbox_col_widths["frame"]
-        centroid_w = self._listbox_col_widths["centroid"]
-        conf_w = self._listbox_col_widths["confidence"]
-
-        frame_str = str(frame_id)
-        # Ensure coordinates is a tuple for consistent formatting
-        if isinstance(coordinates, (list, tuple)) and len(coordinates) == 2:
-            centroid_str = f"({coordinates[0]:3d},{coordinates[1]:3d})" # Fixed width for numbers
-        else:
-            centroid_str = str(coordinates) # Fallback
-
-        conf_str = f"{confidence * 100.0:.0f}%" # Integer percentage for confidence
-
-        eff_frame_w = frame_w 
-        eff_centroid_w = centroid_w
-        eff_conf_w = conf_w
-        
-        s1 = f"{frame_str:^{eff_frame_w}}"
-        s2 = f"{centroid_str:^{eff_centroid_w}}"
-        s3 = f"{conf_str:^{eff_conf_w}}"
-        
-        f_str = str(frame_id).center(frame_w)
-        c_str = f"({coordinates[0]:3d},{coordinates[1]:3d})".center(centroid_w)
-        conf_val_str = f"{confidence * 100.0:.0f}%".center(conf_w)
-        
-        line = " {frame:^{fw}} | {centroid:^{cw}} | {conf:^{conf_w}} ".format(
-            frame=str(frame_id), fw=frame_w,
-            centroid=f"({coordinates[0]:3d},{coordinates[1]:3d})", cw=centroid_w,
-            conf=f"{confidence * 100.0:.0f}%", conf_w=conf_w
-        )
-
-        frame_text = str(frame_id).center(self._listbox_col_widths["frame"])
-        centroid_text = f"({coordinates[0]:3d},{coordinates[1]:3d})".center(self._listbox_col_widths["centroid"])
-        confidence_text = f"{confidence * 100.0:.0f}%".center(self._listbox_col_widths["confidence"])
-
-        return f"| {frame_text} | {centroid_text} | {confidence_text} |"
-
-    def _format_treeview_values(self, frame_id, coordinates, confidence):
+    def _format_treeview_values(self, frame_id: int, coordinates: tuple[int, int], confidence: float) -> tuple[str, str, str]:
         """Helper to format data specifically for the Treeview values tuple."""
         frame_val_str = str(frame_id) # Frame ID for the first column
 
@@ -498,18 +459,18 @@ class AegearMainWindow(tk.Tk):
                 self._update_treeview_selection(first_tracked_frame)
     
     
-    def _seek_frames(self, event):
+    def _seek_frames(self, event: tk.Event) -> None:
         """Move to the tracked frame based on mouse wheel scroll."""
         if event.delta > 0:
             self.next_frame()
         else:
-            self.previous_frame()
+            self.previous_frame
     
-    def updated_sorted_tracked_frame_ids(self):
+    def updated_sorted_tracked_frame_ids(self) -> None:
         """Update the sorted list of tracked frame IDs."""
         self._sorted_tracked_frame_ids = sorted(self._fish_tracking.keys())
     
-    def insert_tracking_point(self, frame_id, coordinates, confidence):
+    def insert_tracking_point(self, frame_id: int, coordinates: tuple[int, int], confidence: float) -> None:
         """Insert a tracking point into the listbox."""
         self._fish_tracking[frame_id] = (coordinates, confidence)
         self.updated_sorted_tracked_frame_ids()
@@ -517,13 +478,12 @@ class AegearMainWindow(tk.Tk):
         self._register_tracking_to_ui(frame_id, coordinates, confidence)
         self.update_gui()
     
-    def remove_tracking_point(self, frame_id):
+    def remove_tracking_point(self, frame_id: int) -> None:
         """Remove a tracking point from the listbox."""
         if frame_id in self._fish_tracking:
             del self._fish_tracking[frame_id]
             self.updated_sorted_tracked_frame_ids()
             self.track_bar.mark_not_processed(frame_id)
-            
             item_iid = str(frame_id)
             if self.tracking_tree.exists(item_iid):
                 self.tracking_tree.delete(item_iid)
@@ -986,26 +946,20 @@ class AegearMainWindow(tk.Tk):
             return np.array([self._fish_tracking[frame_id][0] for frame_id in self._sorted_tracked_frame_ids])
         return None
     
-    def _get_current_track_point(self):
-        """
-        Get the tracking point for the current frame.
-        Returns None if no tracking data is available for that frame.
-        """
+    def _get_current_track_point(self) -> Optional[tuple[int, int]]:
+        """Get the tracking point for the current frame. Returns None if no tracking data is available for that frame."""
         current_frame_id = self._get_current_frame_number()
         return self._get_track_point(current_frame_id)
     
-    def _compute_travel_distance(self):
-        """
-        Compute the travel distance based on the tracked points.
-        Returns the total distance traveled in cm.
-        """
+    def _compute_travel_distance(self) -> float:
+        """Compute the travel distance based on the tracked points. Returns the total distance traveled in cm."""
         if self._fish_tracking:
             tracked_points = np.array([self._fish_tracking[frame_id][0] for frame_id in self._sorted_tracked_frame_ids])
             distances = np.linalg.norm(np.diff(tracked_points, axis=0), axis=1)
-            return np.sum(distances) * self._pixel_to_cm_ratio
+            return float(np.sum(distances) * self._pixel_to_cm_ratio)
         return 0.0
 
-    def update_gui(self):
+    def update_gui(self) -> None:
         """
         Update the image display and the time label based on the current frame.
         """
@@ -1064,11 +1018,8 @@ class AegearMainWindow(tk.Tk):
         # Set the main image (this triggers redraw including overlays)
         self.video_canvas.set_image(self._current_frame)
 
-    def slider_value_changed(self, value):
-        """
-        Callback for slider value changes.
-        Reloads and displays the corresponding frame.
-        """
+    def slider_value_changed(self, value: int) -> None:
+        """Callback for slider value changes. Reloads and displays the corresponding frame."""
         self._current_frame = self._read_frame(int(value))
         self._display_image = self._current_frame.copy()
         self.update_gui()
@@ -1084,7 +1035,7 @@ class AegearMainWindow(tk.Tk):
         assert self._current_frame is not None, "Failed to load first frame."
         self._image_width = self._current_frame.shape[1]
 
-    def _frame_to_time(self, frame, fps):
+    def _frame_to_time(self, frame: float, fps: float) -> str:
         """
         Convert a frame number to a formatted time string (hh:mm:ss).
         """
