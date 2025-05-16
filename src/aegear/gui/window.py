@@ -2,6 +2,7 @@ import json
 import threading
 import time
 import bisect
+from typing import Optional
 
 # Third-party imports
 import numpy as np
@@ -14,7 +15,7 @@ import tkinter.filedialog as filedialog
 
 # Internal modules
 from aegear.calibration import SceneCalibration
-from aegear.trajectory import trajectory_length, smooth_trajectory
+from aegear.trajectory import smooth_trajectory
 from aegear.tracker import FishTracker
 
 from aegear.gui.tracking_bar import TrackingBar
@@ -62,7 +63,6 @@ class AegearMainWindow(tk.Tk):
         self._fish_tracking = {}
         self._sorted_tracked_frame_ids = []
         self._trajectory_smooth_size = 5
-        self._smooth_trajectory = None
         self._screen_points = []
         self._num_frames = 100
         self._clip = None
@@ -307,14 +307,23 @@ class AegearMainWindow(tk.Tk):
     def _delete_current_tracked_frame(self):
         """Delete the currently tracked frame from the list."""
         self.remove_tracking_point(self._get_current_frame_number())
-        self.update_smooth_trajectory()
-        self._rebuild_tracking_treeview()
-    
+
     def _rebuild_tracking_treeview(self):
-        """Rebuild the tracking listbox from the current fish tracking data."""
+        """Rebuild the tracking listbox from the current fish tracking data, optimized for large datasets."""
         self.tracking_tree.delete(*self.tracking_tree.get_children())
-        for frame_id, (coordinates, confidence) in sorted(self._fish_tracking.items()):
-            self._register_tracking_to_ui(frame_id, coordinates, confidence)
+        # Prepare all items in sorted order
+        sorted_items = sorted(self._fish_tracking.items())
+        treeview_values = [self._format_treeview_values(frame_id, coordinates, confidence)
+                           for frame_id, (coordinates, confidence) in sorted_items]
+        # Insert all items in one pass
+        for idx, (frame_id, (coordinates, confidence)) in enumerate(sorted_items):
+            item_iid = str(frame_id)
+            self.tracking_tree.insert(
+                parent='',
+                index=idx,
+                iid=item_iid,
+                values=treeview_values[idx]
+            )
         self.update_gui()
 
     def _format_listbox_entry(self, frame_id, coordinates, confidence):
@@ -404,15 +413,6 @@ class AegearMainWindow(tk.Tk):
             )
 
         self.tracking_tree.see(item_iid)
-
-    def update_smooth_trajectory(self):
-        trajectory = []
-        for t in self._tracked_frames():
-            (x, y) = self._get_track_point(t)
-            trajectory.append([t, x, y])
-        
-        trajectory = np.array(trajectory)
-        self._smooth_trajectory = smooth_trajectory(trajectory, self._trajectory_smooth_size)
 
     def _handle_canvas_left_click(self, mapped_coords, event):
         if self._calibrated:
@@ -513,7 +513,6 @@ class AegearMainWindow(tk.Tk):
         """Insert a tracking point into the listbox."""
         self._fish_tracking[frame_id] = (coordinates, confidence)
         self.updated_sorted_tracked_frame_ids()
-        self.update_smooth_trajectory()
         self.track_bar.mark_processed(frame_id)
         self._register_tracking_to_ui(frame_id, coordinates, confidence)
         self.update_gui()
@@ -524,12 +523,10 @@ class AegearMainWindow(tk.Tk):
             del self._fish_tracking[frame_id]
             self.updated_sorted_tracked_frame_ids()
             self.track_bar.mark_not_processed(frame_id)
-
-            if self.tracking_tree.exists(frame_id):
-                self.tracking_tree.delete(frame_id)
-
-            self.update_smooth_trajectory()
-            self._rebuild_tracking_treeview()
+            
+            item_iid = str(frame_id)
+            if self.tracking_tree.exists(item_iid):
+                self.tracking_tree.delete(item_iid)
             self.update_gui()
 
     def _create_menu(self):
@@ -584,7 +581,6 @@ class AegearMainWindow(tk.Tk):
             except ValueError:
                 print(f"Error: Could not parse frame_id for deletion: {item_iid}")
                 
-        self.update_smooth_trajectory()
         self.update_gui()
 
     def _tracking_threshold_changed(self, value):
@@ -606,7 +602,6 @@ class AegearMainWindow(tk.Tk):
         self._trajectory_smooth_size = v
         self.smooth_trajectory_scale.set(v)
 
-        self.update_smooth_trajectory()
         self.update_gui()
 
     def _trajectory_frame_skip_changed(self, value):
@@ -666,9 +661,7 @@ class AegearMainWindow(tk.Tk):
         progress_reporter.close()
 
         # Refresh helper data after tracking
-        # WARNING: Mind the order, smooth trajectory update requires sorted frame IDs.
         self.updated_sorted_tracked_frame_ids()
-        self.update_smooth_trajectory()
 
         # Redraw the current frame with the trajectory.
         self._current_frame = self._read_current_frame()
@@ -689,7 +682,6 @@ class AegearMainWindow(tk.Tk):
         self.track_bar.clear()
         self._fish_tracking = {}
         self._sorted_tracked_frame_ids = []
-        self._smooth_trajectory = None
         self.tracking_tree.delete(*self.tracking_tree.get_children())
         self.update_gui()
 
@@ -724,7 +716,6 @@ class AegearMainWindow(tk.Tk):
             self.track_bar.mark_processed(frame_id)
             self._register_tracking_to_ui(frame_id, coordinates, confidence)
         
-        self.update_smooth_trajectory()
         self.updated_sorted_tracked_frame_ids()
         self._rebuild_tracking_treeview()
         self.update_gui()
@@ -868,7 +859,6 @@ class AegearMainWindow(tk.Tk):
         self._screen_points = []
 
         self.updated_sorted_tracked_frame_ids()
-        self.update_smooth_trajectory()
 
         self._reload_frame()
         self.update_gui()
@@ -990,6 +980,12 @@ class AegearMainWindow(tk.Tk):
             return point
         return None
     
+    def _get_tracking_data(self) -> Optional[np.ndarray]:
+        """Get all present tracking data as a numpy array of coordinates, if present. If not, return None."""
+        if self._fish_tracking:
+            return np.array([self._fish_tracking[frame_id][0] for frame_id in self._sorted_tracked_frame_ids])
+        return None
+    
     def _get_current_track_point(self):
         """
         Get the tracking point for the current frame.
@@ -997,6 +993,17 @@ class AegearMainWindow(tk.Tk):
         """
         current_frame_id = self._get_current_frame_number()
         return self._get_track_point(current_frame_id)
+    
+    def _compute_travel_distance(self):
+        """
+        Compute the travel distance based on the tracked points.
+        Returns the total distance traveled in cm.
+        """
+        if self._fish_tracking:
+            tracked_points = np.array([self._fish_tracking[frame_id][0] for frame_id in self._sorted_tracked_frame_ids])
+            distances = np.linalg.norm(np.diff(tracked_points, axis=0), axis=1)
+            return np.sum(distances) * self._pixel_to_cm_ratio
+        return 0.0
 
     def update_gui(self):
         """
@@ -1004,7 +1011,6 @@ class AegearMainWindow(tk.Tk):
         """
         fps = self._clip.fps if self._clip else 30
         current_frame_id = self._get_current_frame_number()
-
 
         self.timeline_label['text'] = f"Time: {self._frame_to_time(float(current_frame_id), fps)}, Frame: {current_frame_id}/{self._num_frames}"
 
@@ -1017,10 +1023,33 @@ class AegearMainWindow(tk.Tk):
         calib_points = self._screen_points if self._calibration_running or (self._calibrated and not self._screen_points) else []
         track_point = self._get_current_track_point()
 
-        # Update the trajectory length and distance status bar.
-        if self._smooth_trajectory is not None:
-            travelDistance = trajectory_length(self._smooth_trajectory) * self._pixel_to_cm_ratio
-            self.distance_status_bar['text'] = "Distance: {} cm".format(travelDistance)
+        # --- Compute local window for trajectory smoothing/drawing ---
+        # Only smooth and draw the visible chunk (last N seconds/frames)
+        window_seconds = self.video_canvas.trajectory_fade_seconds if hasattr(self, 'video_canvas') else 3.0
+        window_frames = int(round(window_seconds * fps))
+        all_traj = []
+        for t in self._tracked_frames():
+            pt = self._get_track_point(t)
+            if pt is not None:
+                x, y = pt
+                all_traj.append([t, x, y])
+        if all_traj:
+            # Find the start index for the window
+            time_stamps = [p[0] for p in all_traj]
+            t_min = current_frame_id - window_frames
+            start_idx = bisect.bisect_left(time_stamps, t_min)
+            window_chunk = all_traj[start_idx:]
+            # Only smooth if enough points
+            if len(window_chunk) >= self._trajectory_smooth_size:
+                smoothed_chunk = smooth_trajectory(window_chunk, self._trajectory_smooth_size)
+            else:
+                smoothed_chunk = window_chunk
+        else:
+            smoothed_chunk = []
+
+        # Update the trajectory length and distance status bar (use all points, not just window)
+        travel_distance = self._compute_travel_distance()
+        self.distance_status_bar['text'] = "Distance: {} cm".format(travel_distance)
 
         # Update the data info for correct trajectory drawing about the frame.
         self.video_canvas.set_current_frame_id_for_trajectory(current_frame_id)
@@ -1029,7 +1058,7 @@ class AegearMainWindow(tk.Tk):
         self.video_canvas.set_calibration_points_overlay(calib_points)
         self.video_canvas.set_tracked_point_overlay(track_point)
 
-        trajectory_overlay = self._smooth_trajectory if self._draw_trajectory.get() else None
+        trajectory_overlay = smoothed_chunk if (self._draw_trajectory.get() and smoothed_chunk) else None
         self.video_canvas.set_trajectory_overlay(trajectory_overlay)
 
         # Set the main image (this triggers redraw including overlays)
