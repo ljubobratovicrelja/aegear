@@ -158,7 +158,7 @@ class AegearMainWindow(tk.Tk):
         calib_frame = tk.LabelFrame(self.left_toolbox_frame, text="Calibration")
         calib_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
 
-        self.calibration_button = tk.Button(calib_frame, text="Calibrate", command=self._calibrate, fg="red", state=tk.DISABLED)
+        self.calibration_button = tk.Button(calib_frame, text="Calibrate", command=self._calibrate, state=tk.DISABLED)
         self.calibration_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
 
         track_control_frame = tk.LabelFrame(self.left_toolbox_frame, text="Tracking Control")
@@ -787,7 +787,6 @@ class AegearMainWindow(tk.Tk):
         self._pixel_to_cm_ratio = 1.0
         self._screen_points = []
         self.calibration_button['text'] = "Calibrate"
-        self.calibration_button['fg'] = "red"
 
         # Rebind default mouse events.
         self.update_gui()
@@ -817,7 +816,6 @@ class AegearMainWindow(tk.Tk):
         self.status_bar['text'] = "Calibration started - left click to select corner points of the scene."
         self.status_bar['fg'] = "orange"
         self.calibration_button['text'] = "Cancel Calibration"
-        self.calibration_button['fg'] = "purple"
 
         self.update_gui()
 
@@ -833,7 +831,6 @@ class AegearMainWindow(tk.Tk):
             self.status_bar['text'] = "Calibration complete: pixel to cm ratio is {}".format(self._pixel_to_cm_ratio)
             self.status_bar['fg'] = "green"
             self.calibration_button['text'] = "Reset Calibration"
-            self.calibration_button['fg'] = "green"
             self.set_track_start_button["state"] = tk.NORMAL
             self.set_track_end_button["state"] = tk.NORMAL
             self.run_tracking_button["state"] = tk.NORMAL
@@ -843,7 +840,6 @@ class AegearMainWindow(tk.Tk):
             self.status_bar['text'] = "Calibration failed - internal error: {}".format(e)
             self.status_bar['fg'] = "red"
             self.calibration_button['text'] = "Calibrate"
-            self.calibration_button['fg'] = "red"
 
         self._screen_points = []
 
