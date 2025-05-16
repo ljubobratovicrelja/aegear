@@ -6,6 +6,8 @@ Assumes trajectory is a list of (x, y) pixel coordinates sampled at video frame 
 """
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
+
 from scipy.signal import savgol_filter
 
 
@@ -36,41 +38,46 @@ def smooth_trajectory(trajectory: list[tuple[int, int, int]], filterSize: int = 
     smoothed = list(zip(t.astype(int), x.astype(int), y.astype(int)))
     return smoothed
 
-
 def detect_trajectory_outliers(
     trajectory: list[tuple[int, int, int]],
     threshold: float = 3.0,
     window: int = 5
 ) -> list[int]:
     """
-    Detect outlier frames in a trajectory based on local standard deviation.
-    For each point, if its distance from the local mean (in a window) exceeds
-    threshold * local std, it is considered an outlier.
+    Vectorized outlier detection using rolling median and MAD.
 
-    Parameters:
-        trajectory: list of (frame, x, y)
-        threshold: float, number of std deviations to consider as outlier
-        window: int, size of the local window (must be odd, default 5)
+    Args:
+        trajectory: List of (frame_idx, x, y) tuples.
+        threshold: Z-score threshold for MAD.
+        window: Half-window size for rolling stats.
+
     Returns:
-        List of frame indices (ints) that are outliers.
+        List of frame indices marked as outliers.
     """
-    if len(trajectory) < window or window < 3:
+    if len(trajectory) < 2 * window + 1:
         return []
-    if window % 2 == 0:
-        window += 1
-    half = window // 2
-    traj_arr = np.array(trajectory)
-    outlier_frames = []
-    for i in range(len(traj_arr)):
-        start = max(0, i - half)
-        end = min(len(traj_arr), i + half + 1)
-        local = traj_arr[start:end, 1:3]  # x, y only
-        if len(local) < 3:
-            continue
-        mean = np.mean(local, axis=0)
-        std = np.std(local, axis=0)
-        dist = np.linalg.norm(traj_arr[i, 1:3] - mean)
-        std_total = np.linalg.norm(std)
-        if std_total > 0 and dist > threshold * std_total:
-            outlier_frames.append(int(traj_arr[i, 0]))
-    return outlier_frames
+
+    frame_idx, xs, ys = zip(*trajectory)
+    xs = np.array(xs)
+    ys = np.array(ys)
+    n = len(xs)
+
+    # Create sliding windows over x and y
+    x_windows = sliding_window_view(xs, 2 * window + 1)
+    y_windows = sliding_window_view(ys, 2 * window + 1)
+
+    # Medians and MADs
+    x_medians = np.median(x_windows, axis=1)
+    y_medians = np.median(y_windows, axis=1)
+    x_mads = np.median(np.abs(x_windows - x_medians[:, None]), axis=1) + 1e-6
+    y_mads = np.median(np.abs(y_windows - y_medians[:, None]), axis=1) + 1e-6
+
+    # Compute Z-scores for center points
+    center_indices = np.arange(window, n - window)
+    x_center = xs[center_indices]
+    y_center = ys[center_indices]
+    z_x = np.abs(x_center - x_medians) / x_mads
+    z_y = np.abs(y_center - y_medians) / y_mads
+
+    outliers = (z_x > threshold) | (z_y > threshold)
+    return list(np.array(frame_idx)[center_indices[outliers]])

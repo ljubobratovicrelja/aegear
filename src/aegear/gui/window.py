@@ -1124,19 +1124,23 @@ class AegearMainWindow(tk.Tk):
         trajectory = [
             (frame_id, coords[0][0], coords[0][1])
             for frame_id, coords in self._fish_tracking.items()
-            if isinstance(coords, tuple) and len(coords) > 0 and isinstance(coords[0], (tuple, list)) and len(coords[0]) == 2
         ]
+
         if len(trajectory) < 3:
             messagebox.showinfo("Highlight Outliers", "Not enough tracking points to detect outliers.")
             return
+
         threshold = float(self.outlier_threshold_scale.get())
         window = int(self.outlier_window_scale.get())
+
         if window % 2 == 0:
             window += 1
         outlier_frames = detect_trajectory_outliers(trajectory, threshold=threshold, window=window)
+
         if not outlier_frames:
             messagebox.showinfo("Highlight Outliers", "No outliers detected with current settings.")
             return
+
         # Select outlier frames in the Treeview
         self.tracking_tree.selection_remove(self.tracking_tree.selection())
         for frame_id in outlier_frames:
