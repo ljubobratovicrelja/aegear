@@ -39,4 +39,4 @@ CMD ["bash", "-c", "\
     pip install . --no-deps && \
     echo \"Running notebook: $NOTEBOOK_PATH\" && \
     mkdir -p /aegear/output && \
-    papermill \\\"$NOTEBOOK_PATH\\\" \\\"/aegear/output/executed.ipynb\\\""]
+    papermill $NOTEBOOK_PATH /aegear/output/executed.ipynb"]
