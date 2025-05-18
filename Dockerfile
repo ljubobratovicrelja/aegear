@@ -26,9 +26,17 @@ RUN pip install --upgrade pip setuptools wheel toml \
 
 # Runtime: clone, install, run notebook
 CMD ["bash", "-c", "\
-    echo \"Cloning Aegear branch: $AEGEAR_BRANCH\" && \
-    git clone --branch $AEGEAR_BRANCH --depth 1 https://github.com/ljubobratovicrelja/aegear.git /aegear && \
-    cd /aegear && \
+    echo \"Preparing Aegear repo in /app\" && \
+    if [ -d /app/.git ]; then \
+    echo 'Repo already exists, resetting to branch $AEGEAR_BRANCH...' && \
+    cd /app && \
+    git fetch origin $AEGEAR_BRANCH && \
+    git reset --hard origin/$AEGEAR_BRANCH; \
+    else \
+    echo 'Cloning fresh repo...' && \
+    git clone --branch $AEGEAR_BRANCH --depth 1 https://github.com/ljubobratovicrelja/aegear.git /app; \
+    fi && \
+    cd /app && \
     echo 'Latest commit:' && git log -1 --pretty=format:'Commit: %h - %s' && \
     echo 'Extracting dependencies (excluding torch*)...' && \
     python3 -c \"import toml; d=toml.load('pyproject.toml'); \
@@ -38,6 +46,5 @@ CMD ["bash", "-c", "\
     pip install -r clean_reqs.txt && \
     pip install . --no-deps && \
     echo \"Running notebook: $NOTEBOOK_PATH\" && \
-    mkdir -p /aegear/output && \
-    cd notebooks && \
-    papermill $(basename $NOTEBOOK_PATH) /aegear/output/executed.ipynb"]
+    mkdir -p /app/output && \
+    papermill $NOTEBOOK_PATH /app/output/executed.ipynb"]
