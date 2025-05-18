@@ -31,7 +31,8 @@ class FishHeatmapDataset(Dataset):
         for img_info in annotation_data['images']:
             file_name = img_info['file_name']
             img_path = os.path.join(image_dir, file_name)
-            heatmap_path = os.path.join(heatmap_dir, os.path.splitext(file_name)[0] + '.npy')
+            heatmap_path = os.path.join(
+                heatmap_dir, os.path.splitext(file_name)[0] + '.npy')
 
             image = cv2.imread(img_path)
             if image is None:
@@ -42,8 +43,10 @@ class FishHeatmapDataset(Dataset):
             self.samples.append((image, heatmap))
 
         # Exclude flagged samples
-        self.samples = [s for i, s in enumerate(self.samples) if i not in self.exclude_indices]
-        print(f"Loaded {len(self.samples)} samples after excluding {len(self.exclude_indices)} flagged samples.")
+        self.samples = [s for i, s in enumerate(
+            self.samples) if i not in self.exclude_indices]
+        print(
+            f"Loaded {len(self.samples)} samples after excluding {len(self.exclude_indices)} flagged samples.")
 
         # Add background samples
         if background_dir:
@@ -51,8 +54,10 @@ class FishHeatmapDataset(Dataset):
             background_files = glob.glob(os.path.join(background_dir, '*.png'))
             random.shuffle(background_files)
 
-            num_background_samples = min(len(background_files), int(len(self.samples) * background_prob))
-            print(f"Adding {num_background_samples} background samples from {len(background_files)} available files.")
+            num_background_samples = min(len(background_files), int(
+                len(self.samples) * background_prob))
+            print(
+                f"Adding {num_background_samples} background samples from {len(background_files)} available files.")
 
             # Add samples to the dataset
             for i in range(num_background_samples):
@@ -62,9 +67,10 @@ class FishHeatmapDataset(Dataset):
                     continue
 
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                heatmap = np.zeros((img.shape[0], img.shape[1]), dtype=np.float32)
+                heatmap = np.zeros(
+                    (img.shape[0], img.shape[1]), dtype=np.float32)
                 self.samples.append((img, heatmap))
-        
+
         # Shuffle the dataset
         random.shuffle(self.samples)
 
@@ -76,7 +82,8 @@ class FishHeatmapDataset(Dataset):
 
         # Convert image and heatmap to PIL
         image = Image.fromarray(image)
-        heatmap_img = Image.fromarray((heatmap * 255).astype(np.uint8))  # 0–255 grayscale
+        heatmap_img = Image.fromarray(
+            (heatmap * 255).astype(np.uint8))  # 0–255 grayscale
 
         # Apply joint transforms (same seed for both)
         if self.joint_transform:
@@ -88,18 +95,20 @@ class FishHeatmapDataset(Dataset):
 
         # Turn image to tensor and normalize to [0,1]
         image = transforms.ToTensor()(image).clamp(0, 1).float()
-        
+
         if self.augmentation_transform:
             image = self.augmentation_transform(image.unsqueeze(0)).squeeze(0)
 
         # Standardize the image.
         image = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225])(image)
+                                     std=[0.229, 0.224, 0.225])(image)
 
         # Convert heatmap to tensor and normalize to [0,1]
-        heatmap_tensor = transforms.ToTensor()(heatmap_img).clamp(0, 1).float()  # shape [1, H, W]
+        heatmap_tensor = transforms.ToTensor()(
+            heatmap_img).clamp(0, 1).float()  # shape [1, H, W]
 
         return image, heatmap_tensor
+
 
 def split_coco_annotations(
     coco_json_path: Path,
@@ -108,7 +117,7 @@ def split_coco_annotations(
 ) -> Tuple[dict, dict]:
     """
     Loads a COCO JSON and splits it into train/val dictionaries based on image-level split.
-    
+
     Args:
         coco_json_path (Path): Path to the COCO annotations.json.
         train_ratio (float): Ratio of images to assign to the training set.
@@ -137,8 +146,10 @@ def split_coco_annotations(
     val_img_ids = {img["id"] for img in val_images}
 
     # Filter annotations
-    train_annotations = [ann for ann in annotations if ann["image_id"] in train_img_ids]
-    val_annotations = [ann for ann in annotations if ann["image_id"] in val_img_ids]
+    train_annotations = [
+        ann for ann in annotations if ann["image_id"] in train_img_ids]
+    val_annotations = [
+        ann for ann in annotations if ann["image_id"] in val_img_ids]
 
     train_dict = {
         "images": train_images,
@@ -154,6 +165,7 @@ def split_coco_annotations(
 
     return train_dict, val_dict
 
+
 class RandomPoissonNoise(torch.nn.Module):
     def __init__(self, p=0.15):
         super().__init__()
@@ -167,9 +179,10 @@ class RandomPoissonNoise(torch.nn.Module):
         noise = torch.poisson(x_scaled)
         return torch.clamp(noise / 255.0, 0.0, 1.0)
 
+
 class DetectionDataset(Dataset):
 
-    _MAX_NEGATIVE_OFFSET = 100 # Maximum offset for negative samples
+    _MAX_NEGATIVE_OFFSET = 100  # Maximum offset for negative samples
 
     def __init__(
         self,
@@ -188,10 +201,12 @@ class DetectionDataset(Dataset):
     ):
 
         self.video_path = os.path.join(video_dir, tracking_data["video"])
-        self.tracking = sorted(tracking_data["tracking"], key=lambda x: x["frame_id"])
+        self.tracking = sorted(
+            tracking_data["tracking"], key=lambda x: x["frame_id"])
         self.output_size = output_size
         self.crop_size = crop_size
-        self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(interpolation_smoothness)
+        self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(
+            interpolation_smoothness)
         self.center_offset_range = center_offset_range
         self.rotation_range = rotation_range
         self.scale_range = scale_range
@@ -212,10 +227,10 @@ class DetectionDataset(Dataset):
         self.augmentation_transform = augmentation_transform
 
         self.normalize = transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
-    
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+
     @staticmethod
     def build_split_datasets(json_filepaths, video_dir, output_size=128, crop_size=256,
                              train_fraction=0.9, center_offset_range=15, temporal_jitter_range=10,
@@ -299,8 +314,10 @@ class DetectionDataset(Dataset):
         max_frame = int(frame_ids.max())
         dense_frames = np.arange(min_frame, max_frame)
 
-        rbf_x = Rbf(frame_ids, coords[:, 0], function='multiquadric', epsilon=interpolation_smoothness)
-        rbf_y = Rbf(frame_ids, coords[:, 1], function='multiquadric', epsilon=interpolation_smoothness)
+        rbf_x = Rbf(
+            frame_ids, coords[:, 0], function='multiquadric', epsilon=interpolation_smoothness)
+        rbf_y = Rbf(
+            frame_ids, coords[:, 1], function='multiquadric', epsilon=interpolation_smoothness)
 
         x_interp = rbf_x(dense_frames)
         y_interp = rbf_y(dense_frames)
@@ -308,13 +325,14 @@ class DetectionDataset(Dataset):
         trajectory = np.stack([x_interp, y_interp], axis=1)
 
         return trajectory, min_frame, max_frame
-    
+
     def _read_frame(self, frame_id):
         self.video.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
         ret, img = self.video.read()
         if not ret:
-            raise Exception(f"Could not read frame {frame_id} from video {self.video_path}")
-        
+            raise Exception(
+                f"Could not read frame {frame_id} from video {self.video_path}")
+
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         return img
@@ -350,7 +368,8 @@ class DetectionDataset(Dataset):
             center_point = (crop_size // 2, crop_size // 2)
             M = cv2.getRotationMatrix2D(center_point, rotation_deg, scale)
 
-            rotated = cv2.warpAffine(crop, M, (crop_size, crop_size), flags=cv2.INTER_LINEAR)
+            rotated = cv2.warpAffine(
+                crop, M, (crop_size, crop_size), flags=cv2.INTER_LINEAR)
 
             # Final center crop to self.crop_size
             start = crop_size // 2 - self.output_size // 2
@@ -370,7 +389,8 @@ class DetectionDataset(Dataset):
         y = y[:, None]
 
         x0, y0 = center
-        heatmap = torch.exp(-((x - x0)**2 + (y - y0)**2) / (2 * self.gaussian_sigma**2))
+        heatmap = torch.exp(-((x - x0)**2 + (y - y0)**2) /
+                            (2 * self.gaussian_sigma**2))
         return heatmap
 
     def __len__(self):
@@ -386,12 +406,16 @@ class DetectionDataset(Dataset):
         is_negative = random.random() < self.negative_sample_prob
 
         if not is_negative and (self.rotation_range or self.scale_range):
-            rotation_deg = np.random.uniform(-self.rotation_range, self.rotation_range) if self.rotation_range else 0.0
-            scale = np.random.uniform(1 - self.scale_range, 1 + self.scale_range) if self.scale_range else 1.0
+            rotation_deg = np.random.uniform(-self.rotation_range,
+                                             self.rotation_range) if self.rotation_range else 0.0
+            scale = np.random.uniform(
+                1 - self.scale_range, 1 + self.scale_range) if self.scale_range else 1.0
 
             if self.center_offset_range > 0:
-                offset_x = np.random.uniform(-self.center_offset_range, self.center_offset_range)
-                offset_y = np.random.uniform(-self.center_offset_range, self.center_offset_range)
+                offset_x = np.random.uniform(-self.center_offset_range,
+                                             self.center_offset_range)
+                offset_y = np.random.uniform(-self.center_offset_range,
+                                             self.center_offset_range)
                 translate = (offset_x, offset_y)
             else:
                 translate = (0, 0)
@@ -403,24 +427,31 @@ class DetectionDataset(Dataset):
         template_frame_id = template_tracking["frame_id"]
 
         if self.temporal_jitter_range > 0:
-            jitter = random.randint(-self.temporal_jitter_range, self.temporal_jitter_range)
+            jitter = random.randint(-self.temporal_jitter_range,
+                                    self.temporal_jitter_range)
             template_frame_id += jitter
 
-        template_smooth_id = max(0, min(template_frame_id - self.min_frame, len(self.smooth_trajectory) - 1))
+        template_smooth_id = max(
+            0, min(template_frame_id - self.min_frame, len(self.smooth_trajectory) - 1))
         template_coordinate = self.smooth_trajectory[template_smooth_id]
 
         if is_negative:
-            offset_x = random.choice([-1, 1]) * random.randint(DetectionDataset._MAX_NEGATIVE_OFFSET // 2, DetectionDataset._MAX_NEGATIVE_OFFSET)
-            offset_y = random.choice([-1, 1]) * random.randint(DetectionDataset._MAX_NEGATIVE_OFFSET // 2, DetectionDataset._MAX_NEGATIVE_OFFSET)
+            offset_x = random.choice([-1, 1]) * random.randint(
+                DetectionDataset._MAX_NEGATIVE_OFFSET // 2, DetectionDataset._MAX_NEGATIVE_OFFSET)
+            offset_y = random.choice([-1, 1]) * random.randint(
+                DetectionDataset._MAX_NEGATIVE_OFFSET // 2, DetectionDataset._MAX_NEGATIVE_OFFSET)
 
             # Adjust the template coordinates are within the frame
             template_coordinate = (
-                max(DetectionDataset._MAX_NEGATIVE_OFFSET // 2, min(template_coordinate[0] + offset_x, self.frame_width - 1 - DetectionDataset._MAX_NEGATIVE_OFFSET // 2)),
-                max(DetectionDataset._MAX_NEGATIVE_OFFSET // 2, min(template_coordinate[1] + offset_y, self.frame_height - 1 - DetectionDataset._MAX_NEGATIVE_OFFSET // 2))
+                max(DetectionDataset._MAX_NEGATIVE_OFFSET // 2, min(
+                    template_coordinate[0] + offset_x, self.frame_width - 1 - DetectionDataset._MAX_NEGATIVE_OFFSET // 2)),
+                max(DetectionDataset._MAX_NEGATIVE_OFFSET // 2, min(
+                    template_coordinate[1] + offset_y, self.frame_height - 1 - DetectionDataset._MAX_NEGATIVE_OFFSET // 2))
             )
 
         try:
-            template = self._get_crop(template_frame_id, template_coordinate, transform)
+            template = self._get_crop(
+                template_frame_id, template_coordinate, transform)
         except IndexError:
             return self.__getitem__((idx + 1) % len(self))
 
@@ -429,7 +460,8 @@ class DetectionDataset(Dataset):
 
         # Augmentation with same seed
         if not is_negative and self.augmentation_transform:
-            template = self.augmentation_transform(template.unsqueeze(0)).squeeze(0)
+            template = self.augmentation_transform(
+                template.unsqueeze(0)).squeeze(0)
 
         # Normalize the images
         template = self.normalize(template)
@@ -447,11 +479,11 @@ class DetectionDataset(Dataset):
         return (
             template, heatmap
         )
-    
-        
+
+
 class TrackingDataset(Dataset):
 
-    _MAX_NEGATIVE_OFFSET = 50 # Maximum offset for negative samples
+    _MAX_NEGATIVE_OFFSET = 50  # Maximum offset for negative samples
     _OUTPUT_SIZE = 128
     _CROP_SIZE = 168
 
@@ -472,8 +504,10 @@ class TrackingDataset(Dataset):
     ):
 
         self.video_path = os.path.join(video_dir, tracking_data["video"])
-        self.tracking = sorted(tracking_data["tracking"], key=lambda x: x["frame_id"])
-        self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(interpolation_smoothness)
+        self.tracking = sorted(
+            tracking_data["tracking"], key=lambda x: x["frame_id"])
+        self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(
+            interpolation_smoothness)
         self.future_frame_seek = future_frame_seek
         self.random_pick_future_seek = random_pick_future_seek
         self.rotation_range = rotation_range
@@ -496,14 +530,14 @@ class TrackingDataset(Dataset):
         self.augmentation_transform = augmentation_transform
 
         self.normalize = transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
-    
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+
     @staticmethod
     def build_split_datasets(json_filepaths, video_dir, train_fraction=0.9,
-                         future_frame_seek=[1, 3, 5, 7], interpolation_smoothness=0.5, gaussian_sigma=6.0,
-                         augmentation_transforms=None, rotation_range=None, scale_range=None, negative_sample_prob=0.0):
+                             future_frame_seek=[1, 3, 5, 7], interpolation_smoothness=0.5, gaussian_sigma=6.0,
+                             augmentation_transforms=None, rotation_range=None, scale_range=None, negative_sample_prob=0.0):
 
         train_datasets = []
         val_datasets = []
@@ -577,8 +611,10 @@ class TrackingDataset(Dataset):
         max_frame = int(frame_ids.max())
         dense_frames = np.arange(min_frame, max_frame)
 
-        rbf_x = Rbf(frame_ids, coords[:, 0], function='multiquadric', epsilon=interpolation_smoothness)
-        rbf_y = Rbf(frame_ids, coords[:, 1], function='multiquadric', epsilon=interpolation_smoothness)
+        rbf_x = Rbf(
+            frame_ids, coords[:, 0], function='multiquadric', epsilon=interpolation_smoothness)
+        rbf_y = Rbf(
+            frame_ids, coords[:, 1], function='multiquadric', epsilon=interpolation_smoothness)
 
         x_interp = rbf_x(dense_frames)
         y_interp = rbf_y(dense_frames)
@@ -586,7 +622,7 @@ class TrackingDataset(Dataset):
         trajectory = np.stack([x_interp, y_interp], axis=1)
 
         return trajectory, min_frame, max_frame
-    
+
     def test_sequence_cache(self):
         for frame_id in range(self.min_frame, self.max_frame):
             try:
@@ -598,7 +634,8 @@ class TrackingDataset(Dataset):
             img = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             coodinate = self.smooth_trajectory[frame_id - self.min_frame]
 
-            cv2.circle(img, (int(coodinate[0]), int(coodinate[1])), 5, (0, 255, 0), -1)
+            cv2.circle(img, (int(coodinate[0]), int(
+                coodinate[1])), 5, (0, 255, 0), -1)
 
             cv2.imshow("Test", np.array(img))
             cv2.waitKey(0)
@@ -607,8 +644,9 @@ class TrackingDataset(Dataset):
         self.video.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
         ret, img = self.video.read()
         if not ret:
-            raise Exception(f"Could not read frame {frame_id} from video {self.video_path}")
-        
+            raise Exception(
+                f"Could not read frame {frame_id} from video {self.video_path}")
+
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         return img
@@ -645,7 +683,8 @@ class TrackingDataset(Dataset):
             center_point = (crop_size // 2, crop_size // 2)
             M = cv2.getRotationMatrix2D(center_point, rotation_deg, scale)
 
-            rotated = cv2.warpAffine(crop, M, (crop_size, crop_size), flags=cv2.INTER_LINEAR)
+            rotated = cv2.warpAffine(
+                crop, M, (crop_size, crop_size), flags=cv2.INTER_LINEAR)
 
             # Final center crop to self.crop_size
             start = crop_size // 2 - output_size // 2
@@ -685,7 +724,7 @@ class TrackingDataset(Dataset):
 
         return search_roi_hit
 
-    def generate_gaussian_heatmap(self, center ):
+    def generate_gaussian_heatmap(self, center):
         output_size = TrackingDataset._OUTPUT_SIZE
 
         x = torch.arange(0, output_size, 1).float()
@@ -693,11 +732,13 @@ class TrackingDataset(Dataset):
         y = y[:, None]
 
         x0, y0 = center
-        heatmap = torch.exp(-((x - x0)**2 + (y - y0)**2) / (2 * self.gaussian_sigma**2))
+        heatmap = torch.exp(-((x - x0)**2 + (y - y0)**2) /
+                            (2 * self.gaussian_sigma**2))
         return heatmap
 
     def __len__(self):
-        max_future_seek = max(self.future_frame_seek) + self.temporal_jitter_range
+        max_future_seek = max(self.future_frame_seek) + \
+            self.temporal_jitter_range
         last_frame = self.tracking[-1]["frame_id"]
         num_margin_frames = 0
 
@@ -724,12 +765,16 @@ class TrackingDataset(Dataset):
             template_tracking = self.tracking[idx]
         else:
             # use modulo to cycle through future_frame_seek
-            frame_jump = self.future_frame_seek[idx % len(self.future_frame_seek)]
-            template_tracking = self.tracking[idx // len(self.future_frame_seek)]
+            frame_jump = self.future_frame_seek[idx % len(
+                self.future_frame_seek)]
+            template_tracking = self.tracking[idx //
+                                              len(self.future_frame_seek)]
 
         if self.rotation_range or self.scale_range:
-            rotation_deg = np.random.uniform(-self.rotation_range, self.rotation_range) if self.rotation_range else 0.0
-            scale = np.random.uniform(1 - self.scale_range, 1 + self.scale_range) if self.scale_range else 1.0
+            rotation_deg = np.random.uniform(-self.rotation_range,
+                                             self.rotation_range) if self.rotation_range else 0.0
+            scale = np.random.uniform(
+                1 - self.scale_range, 1 + self.scale_range) if self.scale_range else 1.0
             transform = (rotation_deg, scale)
         else:
             transform = None
@@ -737,7 +782,8 @@ class TrackingDataset(Dataset):
         template_frame_id = template_tracking["frame_id"]
 
         if self.temporal_jitter_range > 0:
-            jitter = random.randint(-self.temporal_jitter_range, self.temporal_jitter_range)
+            jitter = random.randint(-self.temporal_jitter_range,
+                                    self.temporal_jitter_range)
             template_frame_id += jitter
 
         search_frame_id = template_frame_id + frame_jump
@@ -749,15 +795,20 @@ class TrackingDataset(Dataset):
         search_coordinate = self.smooth_trajectory[search_smooth_id]
 
         if self.centroid_perturbation_range > 0.0:
-            perturbation_x = np.random.uniform(-self.centroid_perturbation_range, self.centroid_perturbation_range)
-            perturbation_y = np.random.uniform(-self.centroid_perturbation_range, self.centroid_perturbation_range)
-            template_coordinate = (template_coordinate[0] + perturbation_x, template_coordinate[1] + perturbation_y)
-                   
+            perturbation_x = np.random.uniform(
+                -self.centroid_perturbation_range, self.centroid_perturbation_range)
+            perturbation_y = np.random.uniform(
+                -self.centroid_perturbation_range, self.centroid_perturbation_range)
+            template_coordinate = (
+                template_coordinate[0] + perturbation_x, template_coordinate[1] + perturbation_y)
+
         is_negative = random.random() < self.negative_sample_prob
 
         if is_negative:
-            offset_x = random.choice([-1, 1]) * random.randint(TrackingDataset._MAX_NEGATIVE_OFFSET // 2, TrackingDataset._MAX_NEGATIVE_OFFSET)
-            offset_y = random.choice([-1, 1]) * random.randint(TrackingDataset._MAX_NEGATIVE_OFFSET // 2, TrackingDataset._MAX_NEGATIVE_OFFSET)
+            offset_x = random.choice([-1, 1]) * random.randint(
+                TrackingDataset._MAX_NEGATIVE_OFFSET // 2, TrackingDataset._MAX_NEGATIVE_OFFSET)
+            offset_y = random.choice([-1, 1]) * random.randint(
+                TrackingDataset._MAX_NEGATIVE_OFFSET // 2, TrackingDataset._MAX_NEGATIVE_OFFSET)
 
             template_coordinate = (
                 search_coordinate[0] + offset_x,
@@ -765,14 +816,17 @@ class TrackingDataset(Dataset):
             )
 
             max_frame_seek = max(self.future_frame_seek)
-            search_frame_id = search_smooth_id + random.randint(-max_frame_seek, max_frame_seek)
+            search_frame_id = search_smooth_id + \
+                random.randint(-max_frame_seek, max_frame_seek)
 
         try:
-            template = self._get_crop(template_frame_id, template_coordinate, transform)
-            search = self._get_crop(search_frame_id, template_coordinate, transform)
+            template = self._get_crop(
+                template_frame_id, template_coordinate, transform)
+            search = self._get_crop(
+                search_frame_id, template_coordinate, transform)
         except IndexError:
             return self.__getitem__((idx + 1) % len(self))
-        
+
         to_tensor = transforms.ToTensor()
         template = to_tensor(template)
         search = to_tensor(search)
@@ -781,23 +835,122 @@ class TrackingDataset(Dataset):
         if self.augmentation_transform:
             seed = np.random.randint(0, 10000)
             torch.manual_seed(seed)
-            template = self.augmentation_transform(template.unsqueeze(0)).squeeze(0)
+            template = self.augmentation_transform(
+                template.unsqueeze(0)).squeeze(0)
             torch.manual_seed(seed)
-            search = self.augmentation_transform(search.unsqueeze(0)).squeeze(0)
+            search = self.augmentation_transform(
+                search.unsqueeze(0)).squeeze(0)
 
         # Normalize the images
         template = self.normalize(template)
         search = self.normalize(search)
 
         if is_negative:
-            heatmap = torch.zeros((1, TrackingDataset._OUTPUT_SIZE, TrackingDataset._OUTPUT_SIZE))
+            heatmap = torch.zeros(
+                (1, TrackingDataset._OUTPUT_SIZE, TrackingDataset._OUTPUT_SIZE))
         else:
-            offset = np.array(search_coordinate) - np.array(template_coordinate)
-            search_roi_hit = self.transform_offset_for_heatmap(offset, transform)
-            heatmap = self.generate_gaussian_heatmap(search_roi_hit).unsqueeze(0)
+            offset = np.array(search_coordinate) - \
+                np.array(template_coordinate)
+            search_roi_hit = self.transform_offset_for_heatmap(
+                offset, transform)
+            heatmap = self.generate_gaussian_heatmap(
+                search_roi_hit).unsqueeze(0)
 
         return (
             template, search, heatmap
         )
-    
-        
+
+
+class BackgroundWindowDataset(torch.utils.data.Dataset):
+    """
+    Dataset for sampling background (no-fish) windows from a video, using a sliding window approach.
+    The user provides a list of frame indices known to contain only background (no fish present).
+    Each sample is a cropped window from a background frame, with optional augmentation, rotation, and scaling.
+    The output is (image, heatmap), where heatmap is always a zero tensor.
+    """
+
+    def __init__(
+        self,
+        video_path: str,
+        background_frames: list[int],
+        output_size: int = 128,
+        crop_size: int = 168,
+        stride_portion: float = 0.5,
+        augmentation_transforms=None,
+        rotation_range=None,
+        scale_range=None,
+    ):
+        self.video_path = video_path
+        self.background_frames = sorted(background_frames)
+        self.output_size = output_size
+        self.crop_size = crop_size
+        self.stride_portion = stride_portion
+        self.augmentation_transforms = augmentation_transforms
+        self.rotation_range = rotation_range
+        self.scale_range = scale_range
+        self.normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+        # Open video and get frame size
+        self.video = cv2.VideoCapture(self.video_path)
+        if not self.video.isOpened():
+            raise Exception(f"Could not open video file: {self.video_path}")
+        self.frame_width = int(self.video.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.frame_height = int(self.video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        # Precompute all valid (frame, y, x) window positions
+        self.samples = []
+        stride = max(1, int(self.stride_portion * self.output_size))
+        for frame_id in self.background_frames:
+            for y in range(0, self.frame_height - self.crop_size + 1, stride):
+                for x in range(0, self.frame_width - self.crop_size + 1, stride):
+                    self.samples.append((frame_id, y, x))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __del__(self):
+        if hasattr(self, 'video') and self.video.isOpened():
+            self.video.release()
+
+    def _read_frame(self, frame_id):
+        self.video.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
+        ret, img = self.video.read()
+        if not ret:
+            raise Exception(
+                f"Could not read frame {frame_id} from video {self.video_path}")
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return img
+
+    def __getitem__(self, idx):
+        frame_id, y, x = self.samples[idx]
+        # Optionally apply rotation/scale
+        if self.rotation_range or self.scale_range:
+            rotation_deg = np.random.uniform(-self.rotation_range,
+                                             self.rotation_range) if self.rotation_range else 0.0
+            scale = np.random.uniform(
+                1 - self.scale_range, 1 + self.scale_range) if self.scale_range else 1.0
+        else:
+            rotation_deg = 0.0
+            scale = 1.0
+        # Read frame and crop
+        frame = self._read_frame(frame_id)
+        crop = frame[y:y+self.crop_size, x:x+self.crop_size, :]
+        # Apply rotation/scale if needed
+        if rotation_deg != 0.0 or scale != 1.0:
+            center_point = (self.crop_size // 2, self.crop_size // 2)
+            M = cv2.getRotationMatrix2D(center_point, rotation_deg, scale)
+            crop = cv2.warpAffine(
+                crop, M, (self.crop_size, self.crop_size), flags=cv2.INTER_LINEAR)
+        # Final center crop to output_size
+        start = self.crop_size // 2 - self.output_size // 2
+        end = start + self.output_size
+        crop = crop[start:end, start:end, :]
+        # To tensor
+        crop = transforms.ToTensor()(crop)
+        # Augmentation
+        if self.augmentation_transforms:
+            crop = self.augmentation_transforms(crop.unsqueeze(0)).squeeze(0)
+        crop = self.normalize(crop)
+        heatmap = torch.zeros((1, self.output_size, self.output_size))
+        return crop, heatmap
