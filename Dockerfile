@@ -8,11 +8,11 @@ WORKDIR /app
 # Install OS and Python tools
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential \
-        ffmpeg \
-        libsm6 \
-        libxext6 \
-        git \
+    build-essential \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    git \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip setuptools wheel toml

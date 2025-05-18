@@ -1,0 +1,43 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv*/
+.venv*/
+env*/
+.venv/
+venv/
+ENV/
+env/
+# VSCode settings
+.vscode/
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+package_build/
+*.egg-info/
+dist/
+*.spec
+
+# Test, temp, and log files
+*.log
+*.tmp
+*.bak
+*.swp
+
+# Data, media, and output (if not needed in image)
+data/maze/
+data/training/
+data/video/
+
+media/
+output/
+publication/
+tools/
