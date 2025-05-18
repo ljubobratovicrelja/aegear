@@ -53,10 +53,10 @@ ENV NOTEBOOK_PATH=notebooks/train.ipynb
 EXPOSE 8888
 
 # Entry script that switches branch and runs notebook
-CMD bash -c "\
+CMD ["bash", "-c", "\
     echo 'Checking out branch: $AEGIT_BRANCH' && \
     git fetch origin $AEGIT_BRANCH && \
     git checkout $AEGIT_BRANCH && \
     echo 'Running notebook: $NOTEBOOK_PATH' && \
     mkdir -p /app/output && \
-    papermill \"$NOTEBOOK_PATH\" \"/app/output/executed.ipynb\""
+    papermill \"$NOTEBOOK_PATH\" \"/app/output/executed.ipynb\""]
