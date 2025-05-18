@@ -47,4 +47,6 @@ CMD ["bash", "-c", "\
     pip install . --no-deps && \
     echo \"Running notebook: $NOTEBOOK_PATH\" && \
     mkdir -p /app/output && \
-    papermill $NOTEBOOK_PATH /app/output/executed.ipynb"]
+    cd /app/notebooks && \
+    papermill $(basename $NOTEBOOK_PATH) /app/output/executed.ipynb"]
+
