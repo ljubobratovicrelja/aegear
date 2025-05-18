@@ -39,6 +39,12 @@ RUN pip install . --no-deps
 # Install Jupyter and Papermill for notebook execution
 RUN pip install jupyter papermill
 
+# Clean pip cache
+RUN rm -rf /root/.cache/pip
+
+# Clean apt cache (if you install packages)
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Environment variables for runtime control
 ENV AEGIT_BRANCH=main
 ENV NOTEBOOK_PATH=notebooks/train.ipynb
