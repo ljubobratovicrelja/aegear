@@ -238,26 +238,26 @@ class SiameseTracker(nn.Module):
             [b_t_att, b_s_att], dim=1)
 
         # Decoder
-        _d4_cat = torch.cat(
+        d4_cat = torch.cat(
             [fused_bottleneck, torch.cat([t5, s5], dim=1)], dim=1)
-        _d4_att = self.att4(_d4_cat)
-        d4_fused = self.up4(_d4_att)
+        d4_att = self.att4(d4_cat)
+        d4_fused = self.up4(d4_att)
 
-        _d3_cat = torch.cat([d4_fused, torch.cat([t4, s4], dim=1)], dim=1)
-        _d3_att = self.att3(_d3_cat)
-        d3_fused = self.up3(_d3_att)
+        d3_cat = torch.cat([d4_fused, torch.cat([t4, s4], dim=1)], dim=1)
+        d3_att = self.att3(d3_cat)
+        d3_fused = self.up3(d3_att)
 
-        _d2_cat = torch.cat([d3_fused, torch.cat([t3, s3], dim=1)], dim=1)
-        _d2_att = self.att2(_d2_cat)
-        d2_fused = self.up2(_d2_att)
+        d2_cat = torch.cat([d3_fused, torch.cat([t3, s3], dim=1)], dim=1)
+        d2_att = self.att2(d2_cat)
+        d2_fused = self.up2(d2_att)
 
-        _d1_cat = torch.cat([d2_fused, torch.cat([t2, s2], dim=1)], dim=1)
-        _d1_att = self.att1(_d1_cat)
-        d1_fused = self.up1(_d1_att)
+        d1_cat = torch.cat([d2_fused, torch.cat([t2, s2], dim=1)], dim=1)
+        d1_att = self.att1(d1_cat)
+        d1_fused = self.up1(d1_att)
 
-        _d0_cat = torch.cat([d1_fused, torch.cat([t1, s1], dim=1)], dim=1)
-        _d0_att = self.att0(_d0_cat)
-        d0_fused = self.up0(_d0_att)
+        d0_cat = torch.cat([d1_fused, torch.cat([t1, s1], dim=1)], dim=1)
+        d0_att = self.att0(d0_cat)
+        d0_fused = self.up0(d0_att)
 
         out = self.out(d0_fused)
         return F.interpolate(out, size=template.shape[2:], mode='bilinear', align_corners=False)
