@@ -208,6 +208,22 @@ class AegearMainWindow(tk.Tk):
         self.next_outlier_button = tk.Button(nav_outlier_frame, text="Next Outlier", command=self._goto_next_outlier)
         self.next_outlier_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(2,0))
 
+        self.delete_outliers_button = tk.Button(
+            cleanup_frame,
+            text="Delete Current Outliers",
+            command=self._delete_current_outliers,
+            state=tk.NORMAL
+        )
+        self.delete_outliers_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
+        self.delete_all_outliers_button = tk.Button(
+            cleanup_frame,
+            text="Delete All Outliers",
+            command=self._delete_all_outliers,
+            state=tk.NORMAL
+        )
+        self.delete_all_outliers_button.pack(side=tk.TOP, fill=tk.X, pady=2, padx=5)
+
         # --- Video Information section ---
         video_info_frame = tk.LabelFrame(self.left_toolbox_frame, text="Video Information")
         video_info_frame.pack(side=tk.TOP, fill=tk.X, expand=False, **toolbox_padding)
@@ -1147,12 +1163,12 @@ class AegearMainWindow(tk.Tk):
         minutes = int((total_seconds % 3600) // 60)
         seconds = int(total_seconds % 60)
         return "{:02}:{:02}:{:02}".format(hours, minutes, seconds)
-
-    def _highlight_outliers(self):
+    
+    def _detect_outliers(self):
         """
-        Run outlier detection on the trajectory and highlight outlier frames in the Treeview.
+        Detect outliers in the trajectory using the specified threshold.
+        Returns a list of outlier frame IDs.
         """
-
         # Prepare trajectory as list of (frame, x, y)
         trajectory = [
             (frame_id, coords[0][0], coords[0][1])
@@ -1160,14 +1176,21 @@ class AegearMainWindow(tk.Tk):
         ]
 
         if len(trajectory) < 3:
-            messagebox.showinfo("Highlight Outliers", "Not enough tracking points to detect outliers.")
-            return
+            return None
 
         threshold = float(self.outlier_threshold_scale.get())
+        return set(detect_trajectory_outliers(trajectory, threshold))
 
-        outlier_frames = detect_trajectory_outliers(trajectory, threshold)
+    def _highlight_outliers(self, show_message=True):
+        """
+        Run outlier detection on the trajectory and highlight outlier frames in the Treeview.
+        """
 
-        self._outlier_frames = set(outlier_frames)
+        self._outlier_frames = self._detect_outliers()
+
+        if not self._outlier_frames and show_message:
+            messagebox.showinfo("Highlight Outliers", "No outliers detected with current settings.")
+            return
 
         # Update tags for all items
         for frame_id in self._fish_tracking:
@@ -1178,11 +1201,8 @@ class AegearMainWindow(tk.Tk):
             if self.tracking_tree.exists(iid):
                 self.tracking_tree.item(iid, tags=tags)
 
-        if not outlier_frames:
-            messagebox.showinfo("Highlight Outliers", "No outliers detected with current settings.")
-            return
-
-        messagebox.showinfo("Highlight Outliers", f"Highlighted {len(outlier_frames)} outlier(s) in yellow.")
+        if show_message:
+            messagebox.showinfo("Highlight Outliers", f"Highlighted {len(self._outlier_frames)} outlier(s) in yellow.")
 
     def _goto_next_outlier(self):
         """Go to the next outlier frame after the current frame."""
@@ -1213,6 +1233,60 @@ class AegearMainWindow(tk.Tk):
         # If none found, wrap to last
         self._set_frame(outlier_ids[-1])
         self._update_treeview_selection(outlier_ids[-1])
+
+    def _delete_current_outliers(self, show_message=True):
+        """Delete all tracking points currently marked as outliers."""
+        if not self._outlier_frames and show_message:
+            messagebox.showinfo("Delete Outliers", "No outliers to delete.")
+            return
+        count = 0
+        for frame_id in list(self._outlier_frames):
+            if frame_id in self._fish_tracking:
+                del self._fish_tracking[frame_id]
+                count += 1
+
+        self._outlier_frames = set()
+
+        self.updated_sorted_tracked_frame_ids()
+        self._rebuild_tracking_treeview()
+        self.update_gui()
+
+        if show_message:
+            messagebox.showinfo("Delete Outliers", f"Deleted {count} outlier(s) from tracking data.")
+
+    def _delete_all_outliers(self):
+        """
+        Iteratively detect and delete outliers for the current threshold until none remain.
+        """
+        threshold = self.outlier_threshold_scale.get()
+        if not messagebox.askokcancel(
+            "Delete All Outliers",
+            f"Are you sure you want to delete ALL outliers? This will remove all detected outliers for threshold {threshold}. This action cannot be undone."):
+            return
+
+        num_deleted = 0
+
+        while True:
+            # Detect outliers
+            outliers = self._detect_outliers()
+            
+            if not outliers:
+                break
+
+            deleted_this_iteration = len(outliers)
+
+            for frame_id in outliers:
+                del self._fish_tracking[frame_id]
+                self.track_bar.mark_not_processed(frame_id)
+
+            num_deleted += deleted_this_iteration
+
+        self.updated_sorted_tracked_frame_ids()
+        self._rebuild_tracking_treeview()
+        self.update_gui()
+
+        self.status_bar['text'] = f"{num_deleted} outliers deleted for threshold {threshold}."
+        self.status_bar['fg'] = "green"
 
     def _update_video_info(self):
         """Update the video information section with current video info."""
