@@ -16,7 +16,7 @@ RUN apt-get update && \
     git \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables
+# Set default environment variables
 ENV AEGEAR_BRANCH=main
 ENV NOTEBOOK_PATH=notebooks/training_unet.ipynb
 
@@ -24,18 +24,19 @@ ENV NOTEBOOK_PATH=notebooks/training_unet.ipynb
 RUN pip install --upgrade pip setuptools wheel toml \
     && pip install jupyter papermill
 
-# Clone and install Aegear
+# Runtime: clone, install, run notebook
 CMD ["bash", "-c", "\
-    echo 'Cloning Aegear branch: $AEGEAR_BRANCH' && \
+    echo \"Cloning Aegear branch: $AEGEAR_BRANCH\" && \
     git clone --branch $AEGEAR_BRANCH --depth 1 https://github.com/ljubobratovicrelja/aegear.git /aegear && \
     cd /aegear && \
+    echo 'Latest commit:' && git log -1 --pretty=format:'Commit: %h - %s' && \
     echo 'Extracting dependencies (excluding torch*)...' && \
     python3 -c \"import toml; d=toml.load('pyproject.toml'); \
     deps = d['project']['dependencies'] + d['project']['optional-dependencies']['dev']; \
     deps = [x for x in deps if not x.startswith('torch')]; \
-    print('\\n'.join(deps))\" > clean_reqs.txt && \
+    print('\\\\n'.join(deps))\" > clean_reqs.txt && \
     pip install -r clean_reqs.txt && \
     pip install . --no-deps && \
-    echo 'Running notebook: $NOTEBOOK_PATH' && \
+    echo \"Running notebook: $NOTEBOOK_PATH\" && \
     mkdir -p /aegear/output && \
-    papermill \"$NOTEBOOK_PATH\" \"/aegear/output/executed.ipynb\""]
+    papermill \\\"$NOTEBOOK_PATH\\\" \\\"/aegear/output/executed.ipynb\\\""]
