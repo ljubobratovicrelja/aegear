@@ -1,11 +1,9 @@
-from typing import Tuple, Optional
+from typing import Optional
 
 import cv2
-import numpy as np
 
 import torch
 import torchvision.transforms as transforms
-from torch.nn.functional import interpolate
 
 from aegear.model import EfficientUNet, SiameseTracker
 from aegear.video import VideoClip
@@ -14,6 +12,7 @@ from aegear.gui.progress_reporter import ProgressReporter
 
 class Prediction:
     """A class to represent a prediction made by the model."""
+
     def __init__(self, confidence, centroid, roi=None):
         """Initialize the prediction.
 
@@ -31,18 +30,19 @@ class Prediction:
         self.centroid = centroid
         self.confidence = confidence
         self.roi = roi
-    
+
     def global_coordinates(self, origin):
         x, y = origin
 
         confidence = self.confidence
         centroid = self.centroid
-        
+
         return Prediction(
             confidence,
-            (centroid[0] + x,centroid[1] + y),
+            (centroid[0] + x, centroid[1] + y),
             self.roi,
         )
+
 
 class FishTracker:
 
@@ -73,23 +73,24 @@ class FishTracker:
         self.last_result = None
         self.history = []
         self.frame_size = None
-    
+
     def run_tracking(self,
                      video: VideoClip,
                      start_frame: int,
                      end_frame: int,
                      model_track_register,
-                     progress_reporter: Optional[ProgressReporter]=None,
+                     progress_reporter: Optional[ProgressReporter] = None,
                      ui_update=None):
         """Run the tracking on a video."""
-      
+
         bgs = self._init_background_subtractor(video, start_frame)
         current_skip = self.tracking_max_skip
         anchor_frame = start_frame
 
         self.last_result = None
 
-        progress_still_running = lambda: progress_reporter is not None and progress_reporter.still_running()
+        def progress_still_running(
+        ): return progress_reporter is not None and progress_reporter.still_running()
 
         while anchor_frame < end_frame and progress_still_running():
             candidate = anchor_frame + current_skip
@@ -101,12 +102,14 @@ class FishTracker:
             if frame is None:
                 break
 
-            result = self._track_frame(frame, mask=self._motion_detection(bgs, frame))
+            result = self._track_frame(
+                frame, mask=self._motion_detection(bgs, frame))
 
             if result is not None:
                 # Store this result for further tracking.
                 self.last_result = result
-                model_track_register(candidate, result.centroid, result.confidence)
+                model_track_register(
+                    candidate, result.centroid, result.confidence)
 
                 anchor_frame = candidate
 
@@ -114,7 +117,8 @@ class FishTracker:
                     progress_reporter.update(anchor_frame)
 
                 if current_skip < self.tracking_max_skip:
-                    current_skip = min(current_skip * 2, self.tracking_max_skip)
+                    current_skip = min(
+                        current_skip * 2, self.tracking_max_skip)
             else:
                 if self.last_result is not None and current_skip > 1:
                     current_skip = max(current_skip // 2, 1)
@@ -134,41 +138,43 @@ class FishTracker:
             return torch.device("mps")
         else:
             return torch.device("cpu")
-    
+
     def _init_transform():
         """Initialize the transform."""
         return transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                std=[0.229, 0.224, 0.225]),
+                                 std=[0.229, 0.224, 0.225]),
         ])
 
     def _init_heatmap_model(self, model_path):
         """Initialize the model."""
         model = EfficientUNet(weights=None)
-        model.load_state_dict(torch.load(model_path, map_location=self._device))
+        model.load_state_dict(torch.load(
+            model_path, map_location=self._device))
         model.to(self._device)
 
         # Set the model to evaluation mode
         model.eval()
         return model
-    
+
     def _init_siamese_model(self, model_path):
         """Initialize the siamese tracking model."""
         model = SiameseTracker()
-        model.load_state_dict(torch.load(model_path, map_location=self._device))
+        model.load_state_dict(torch.load(
+            model_path, map_location=self._device))
         model.to(self._device)
 
         # Set the model to evaluation mode
         model.eval()
         return model
-    
+
     def _track_frame(self, frame, mask=None):
         """Track the fish in the given frame.
-        
+
         Parameters
         ----------
-        
+
         frame : np.ndarray
             The frame to track the fish in.
         mask : np.ndarray, optional
@@ -193,25 +199,30 @@ class FishTracker:
             if result is not None:
                 prediction = result
 
-                prediction.roi = self._tracking_roi(frame, prediction.centroid)[1]
+                prediction.roi = self._tracking_roi(
+                    frame, prediction.centroid)[1]
 
                 return prediction
         else:
             self._debug_print("tracking")
             # Try getting a ROI around the last position.
-            (x1, y1), current_roi = self._tracking_roi(frame, self.last_result.centroid)
-            result = self._evaluate_siamese_model(self.last_result.roi, current_roi)
+            (x1, y1), current_roi = self._tracking_roi(
+                frame, self.last_result.centroid)
+            result = self._evaluate_siamese_model(
+                self.last_result.roi, current_roi)
 
             if result is not None:
                 prediction = result.global_coordinates((x1, y1))
-                prediction.roi = self._tracking_roi(frame, prediction.centroid)[1]
+                prediction.roi = self._tracking_roi(
+                    frame, prediction.centroid)[1]
 
-                self._debug_print(f"Found fish at ({result.centroid}) with confidence {result.confidence}")
+                self._debug_print(
+                    f"Found fish at ({result.centroid}) with confidence {result.confidence}")
 
                 return prediction
 
         return None
-    
+
     def _tracking_roi(self, frame, centroid):
         """Get the tracking ROI around the centroid."""
         x, y = centroid
@@ -228,10 +239,11 @@ class FishTracker:
         y2 = int(y + w_t)
 
         return (x1, y1), frame[y1:y2, x1:x2]
-    
+
     def _init_background_subtractor(self, video: VideoClip, start_frame: int, history=50, dist2threshold=500, warmup=20):
         """Initialize the background subtractor."""
-        background_subtractor = cv2.createBackgroundSubtractorKNN(history=history, dist2Threshold=dist2threshold, detectShadows=False)
+        background_subtractor = cv2.createBackgroundSubtractorKNN(
+            history=history, dist2Threshold=dist2threshold, detectShadows=False)
 
         # Warm up the background subtractor with a few frames.
         for fid in range(max(start_frame - warmup, 0), start_frame):
@@ -244,9 +256,9 @@ class FishTracker:
             gframe = cv2.GaussianBlur(gframe, (5, 5), 1.0)
 
             background_subtractor.apply(gframe, learningRate=0.25)
-        
+
         return background_subtractor
-    
+
     def _motion_detection(self, bgs, frame):
         """Detect motion in the frame using the background subtractor."""
 
@@ -274,9 +286,9 @@ class FishTracker:
 
         list
             A list of predictions made by the model.
-        
+
         """
-        
+
         h, w = frame.shape[:2]
         results = []
 
@@ -293,7 +305,7 @@ class FishTracker:
                     # Check if the window is in the mask.
                     if mask_sum == 0:
                         continue
-                
+
                 try:
                     window = frame[y:y+win_size, x:x+win_size]
                 except:
@@ -310,7 +322,7 @@ class FishTracker:
 
                 # Map out the global coordinates of the predictions.
                 results.append(result.global_coordinates((x, y)))
-        
+
         if results:
             self._debug_print(f"Got {len(results)} results")
 
@@ -319,10 +331,11 @@ class FishTracker:
 
             # Get the best result
             result = results[0]
-        
+
             if result.confidence < self.detection_threshold:
 
-                self._debug_print(f"Best candidate confidence {result.confidence} is below threshold {self.detection_threshold}")
+                self._debug_print(
+                    f"Best candidate confidence {result.confidence} is below threshold {self.detection_threshold}")
                 return None
 
             return result  # Return the best result
@@ -344,7 +357,7 @@ class FishTracker:
         confidence = heatmap[0, 0, y, x].item()
 
         return confidence, (x.int().item(), y.int().item())
-    
+
     def _evaluate_heatmap_model(self, window) -> Prediction:
         """Evaluate the model on a window of the image.
         Note that this returns the prediction in window local space. For global space
@@ -362,27 +375,27 @@ class FishTracker:
             self._debug_print(f"Error in model evaluation: {e}")
             # If we get an error, we just return None.
             return None
-        
+
         result = FishTracker._get_centroid(output)
 
         if result is None:
             self._debug_print("Heatmap: No fish detected")
             return None
-        
+
         (confidence, centroid) = result
-        
+
         return Prediction(confidence, centroid)
-    
+
     def _evaluate_siamese_model(self, last_roi, current_roi) -> Prediction:
 
         # Prepare the input.
         template = self._transform(last_roi) \
-                    .to(self._device) \
-                    .unsqueeze(0)
+            .to(self._device) \
+            .unsqueeze(0)
 
         search = self._transform(current_roi) \
-                    .to(self._device) \
-                    .unsqueeze(0)
+            .to(self._device) \
+            .unsqueeze(0)
 
         try:
             output = torch.sigmoid(self.siamese_model(template, search))
@@ -396,15 +409,15 @@ class FishTracker:
         if result is None:
             self._debug_print("Siamese: No fish detected")
             return None
-        
+
         (confidence, centroid) = result
 
-        if  confidence < self.tracking_threshold:
-            self._debug_print(f"Siamese: Confidence {confidence} is below threshold {self.tracking_threshold}")
+        if confidence < self.tracking_threshold:
+            self._debug_print(
+                f"Siamese: Confidence {confidence} is below threshold {self.tracking_threshold}")
             return None
-        
-        return Prediction(confidence, centroid, roi=None)
 
+        return Prediction(confidence, centroid, roi=None)
 
     def _debug_print(self, msg):
         if self._debug:
