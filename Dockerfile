@@ -17,7 +17,7 @@ RUN apt-get update && \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
-ENV AEGIT_BRANCH=main
+ENV AEGEAR_BRANCH=main
 ENV NOTEBOOK_PATH=notebooks/training_unet.ipynb
 
 # Install Python tools
@@ -26,8 +26,8 @@ RUN pip install --upgrade pip setuptools wheel toml \
 
 # Clone and install Aegear
 CMD ["bash", "-c", "\
-    echo 'Cloning Aegear branch: $AEGIT_BRANCH' && \
-    git clone --branch $AEGIT_BRANCH --depth 1 https://github.com/ljubobratovicrelja/aegear.git /aegear && \
+    echo 'Cloning Aegear branch: $AEGEAR_BRANCH' && \
+    git clone --branch $AEGEAR_BRANCH --depth 1 https://github.com/ljubobratovicrelja/aegear.git /aegear && \
     cd /aegear && \
     echo 'Extracting dependencies (excluding torch*)...' && \
     python3 -c \"import toml; d=toml.load('pyproject.toml'); \
