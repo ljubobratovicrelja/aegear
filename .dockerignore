@@ -33,10 +33,7 @@ dist/
 *.swp
 
 # Data, media, and output (if not needed in image)
-data/maze/
-data/training/
-data/video/
-
+data/
 media/
 output/
 publication/
