@@ -875,6 +875,7 @@ class BackgroundWindowDataset(torch.utils.data.Dataset):
         background_frames: list[int],
         output_size: int = 128,
         crop_size: int = 168,
+        siamese: bool = False,
         stride_portion: float = 0.5,
         augmentation_transforms=None,
         rotation_range=None,
@@ -884,6 +885,7 @@ class BackgroundWindowDataset(torch.utils.data.Dataset):
         self.background_frames = sorted(background_frames)
         self.output_size = output_size
         self.crop_size = crop_size
+        self.siamese = siamese
         self.stride_portion = stride_portion
         self.augmentation_transforms = augmentation_transforms
         self.rotation_range = rotation_range
@@ -953,4 +955,9 @@ class BackgroundWindowDataset(torch.utils.data.Dataset):
             crop = self.augmentation_transforms(crop.unsqueeze(0)).squeeze(0)
         crop = self.normalize(crop)
         heatmap = torch.zeros((1, self.output_size, self.output_size))
-        return crop, heatmap
+
+        if self.siamese:
+            # For Siamese networks, return two identical crops
+            return crop, crop, heatmap
+        else:
+            return crop, heatmap
