@@ -481,6 +481,46 @@ class DetectionDataset(Dataset):
         )
 
 
+class CachedDetectionDataset(Dataset):
+    def __init__(self, root_dir, output_size=128, gaussian_sigma=15.0):
+        with open(os.path.join(root_dir, "metadata.json"), 'r') as f:
+            self.metadata = json.load(f)["samples"]
+
+        self.root_dir = root_dir
+        self.output_size = output_size
+        self.gaussian_sigma = gaussian_sigma
+
+        self.to_tensor = transforms.ToTensor()
+        self.normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+
+    def __len__(self):
+        return len(self.metadata)
+
+    def generate_heatmap(self, center):
+        x = torch.arange(0, self.output_size).float()
+        y = torch.arange(0, self.output_size).float()[:, None]
+        x0, y0 = center
+        heatmap = torch.exp(-((x - x0)**2 + (y - y0)**2) /
+                            (2 * self.gaussian_sigma**2))
+        return heatmap.unsqueeze(0)  # Shape: [1, H, W]
+
+    def __getitem__(self, idx):
+        item = self.metadata[idx]
+        img_path = os.path.join(self.root_dir, item["image_path"])
+        img = self.to_tensor(Image.open(img_path).convert("RGB"))
+        img = self.normalize(img)
+
+        if item.get("background", False):
+            heatmap = torch.zeros((1, self.output_size, self.output_size))
+        else:
+            heatmap = self.generate_heatmap(item["centroid"])
+
+        return img, heatmap
+
+
 class TrackingDataset(Dataset):
 
     _MAX_NEGATIVE_OFFSET = 50  # Maximum offset for negative samples
@@ -877,7 +917,7 @@ class BackgroundWindowDataset(torch.utils.data.Dataset):
         crop_size: int = 168,
         siamese: bool = False,
         stride_portion: float = 0.5,
-        augmentation_transforms=None,
+        augmentation_transform=None,
         rotation_range=None,
         scale_range=None,
     ):
@@ -887,7 +927,7 @@ class BackgroundWindowDataset(torch.utils.data.Dataset):
         self.crop_size = crop_size
         self.siamese = siamese
         self.stride_portion = stride_portion
-        self.augmentation_transforms = augmentation_transforms
+        self.augmentation_transform = augmentation_transform
         self.rotation_range = rotation_range
         self.scale_range = scale_range
         self.normalize = transforms.Normalize(
@@ -951,8 +991,8 @@ class BackgroundWindowDataset(torch.utils.data.Dataset):
         # To tensor
         crop = transforms.ToTensor()(crop)
         # Augmentation
-        if self.augmentation_transforms:
-            crop = self.augmentation_transforms(crop.unsqueeze(0)).squeeze(0)
+        if self.augmentation_transform:
+            crop = self.augmentation_transform(crop.unsqueeze(0)).squeeze(0)
         crop = self.normalize(crop)
         heatmap = torch.zeros((1, self.output_size, self.output_size))
 
