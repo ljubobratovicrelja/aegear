@@ -524,13 +524,13 @@ class CachedDetectionDataset(Dataset):
 class TrackingDataset(Dataset):
 
     _MAX_NEGATIVE_OFFSET = 50  # Maximum offset for negative samples
-    _OUTPUT_SIZE = 128
-    _CROP_SIZE = 168
 
     def __init__(
         self,
         tracking_data,
         video_dir="",
+        output_size=128,
+        crop_size=168,
         future_frame_seek=[1, 3, 5, 7],
         random_pick_future_seek=False,
         interpolation_smoothness=0.5,
@@ -549,6 +549,8 @@ class TrackingDataset(Dataset):
         self.smooth_trajectory, self.min_frame, self.max_frame = self._interpolate_tracking(
             interpolation_smoothness)
         self.future_frame_seek = future_frame_seek
+        self.output_size = output_size
+        self.crop_size = crop_size
         self.random_pick_future_seek = random_pick_future_seek
         self.rotation_range = rotation_range
         self.scale_range = scale_range
@@ -694,8 +696,8 @@ class TrackingDataset(Dataset):
     def _get_crop(self, frame_id, center, transform: Tuple[float, float]):
         frame = self._read_frame(frame_id)
 
-        crop_size = TrackingDataset._CROP_SIZE
-        output_size = TrackingDataset._OUTPUT_SIZE
+        crop_size = self.crop_size
+        output_size = self.output_size
 
         if transform is None:
             x1 = int(center[0] - output_size // 2)
@@ -744,8 +746,8 @@ class TrackingDataset(Dataset):
             np.ndarray of shape (2,), transformed and rescaled offset in heatmap coordinates
         """
 
-        crop_size = TrackingDataset._CROP_SIZE
-        output_size = TrackingDataset._OUTPUT_SIZE
+        crop_size = self.crop_size
+        output_size = self.output_size
 
         if transform:
             rotation_deg, scale = transform
@@ -765,7 +767,7 @@ class TrackingDataset(Dataset):
         return search_roi_hit
 
     def generate_gaussian_heatmap(self, center):
-        output_size = TrackingDataset._OUTPUT_SIZE
+        output_size = self.output_size
 
         x = torch.arange(0, output_size, 1).float()
         y = torch.arange(0, output_size, 1).float()
@@ -887,7 +889,7 @@ class TrackingDataset(Dataset):
 
         if is_negative:
             heatmap = torch.zeros(
-                (1, TrackingDataset._OUTPUT_SIZE, TrackingDataset._OUTPUT_SIZE))
+                (1, self.output_size, self.output_size))
         else:
             offset = np.array(search_coordinate) - \
                 np.array(template_coordinate)
@@ -899,6 +901,58 @@ class TrackingDataset(Dataset):
         return (
             template, search, heatmap
         )
+
+
+class CachedTrackingDataset(Dataset):
+    """
+    Cached version of TrackingDataset.
+    Loads crops and metadata from disk, avoiding video decoding at runtime.
+    Each sample contains (template, search, heatmap).
+    """
+
+    def __init__(self, root_dir, output_size=128, gaussian_sigma=6.0):
+        with open(os.path.join(root_dir, "metadata.json"), 'r') as f:
+            self.metadata = json.load(f)["samples"]
+
+        self.root_dir = root_dir
+        self.output_size = output_size
+        self.gaussian_sigma = gaussian_sigma
+
+        self.to_tensor = transforms.ToTensor()
+        self.normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+
+    def __len__(self):
+        return len(self.metadata)
+
+    def generate_heatmap(self, center):
+        x = torch.arange(0, self.output_size).float()
+        y = torch.arange(0, self.output_size).float()[:, None]
+        x0, y0 = center
+        heatmap = torch.exp(-((x - x0)**2 + (y - y0)**2) /
+                            (2 * self.gaussian_sigma**2))
+        return heatmap.unsqueeze(0)  # Shape: [1, H, W]
+
+    def __getitem__(self, idx):
+        item = self.metadata[idx]
+        template_path = os.path.join(
+            self.root_dir, item["template_path"])
+        search_path = os.path.join(self.root_dir, item["search_path"])
+        template = self.to_tensor(
+            Image.open(template_path).convert("RGB"))
+        search = self.to_tensor(Image.open(search_path).convert("RGB"))
+        template = self.normalize(template)
+        search = self.normalize(search)
+
+        if item.get("background", False):
+            heatmap = torch.zeros(
+                (1, self.output_size, self.output_size))
+        else:
+            heatmap = self.generate_heatmap(item["centroid"])
+
+        return template, search, heatmap
 
 
 class BackgroundWindowDataset(torch.utils.data.Dataset):
