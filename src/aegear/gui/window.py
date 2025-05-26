@@ -1141,14 +1141,32 @@ class AegearMainWindow(tk.Tk):
         current_frame_id = self._get_current_frame_number()
         return self._get_track_point(current_frame_id)
 
-    def _compute_travel_distance(self) -> float:
-        """Compute the travel distance based on the tracked points. Returns the total distance traveled in cm."""
-        if self._fish_tracking:
-            tracked_points = np.array(
-                [self._fish_tracking[frame_id][0] for frame_id in self._sorted_tracked_frame_ids])
-            distances = np.linalg.norm(np.diff(tracked_points, axis=0), axis=1)
-            return float(np.sum(distances) * self._pixel_to_cm_ratio)
-        return 0.0
+    def _compute_travel_distance(self) -> tuple[float, float]:
+        """Compute the total and current travel distance in cm.
+        Returns (total_distance, current_distance)."""
+        if not self._fish_tracking or not self._sorted_tracked_frame_ids:
+            return 0.0, 0.0
+        tracked_points = np.array([
+            self._fish_tracking[frame_id][0] for frame_id in self._sorted_tracked_frame_ids
+        ])
+        distances = np.linalg.norm(np.diff(tracked_points, axis=0), axis=1)
+        total_distance = float(np.sum(distances) * self._pixel_to_cm_ratio)
+
+        # Compute current distance up to the current frame (if after start)
+        current_frame = self._get_current_frame_number()
+        # Find the last tracked frame that is <= current_frame
+        idx = None
+        for i, frame_id in enumerate(self._sorted_tracked_frame_ids):
+            if frame_id > current_frame:
+                break
+            idx = i
+        if idx is not None and idx > 0:
+            current_points = tracked_points[:idx+1]
+            current_distances = np.linalg.norm(np.diff(current_points, axis=0), axis=1)
+            current_distance = float(np.sum(current_distances) * self._pixel_to_cm_ratio)
+        else:
+            current_distance = 0.0
+        return total_distance, current_distance
 
     def _compute_trajectory_overlay(
         self,
@@ -1210,9 +1228,11 @@ class AegearMainWindow(tk.Tk):
         self.video_canvas.set_trajectory_overlay(trajectory_overlay)
 
         # Update the trajectory length and distance status bar (use all points, not just window)
-        travel_distance = self._compute_travel_distance()
-        self.distance_status_bar['text'] = "Distance: {} cm".format(
-            travel_distance)
+        total_distance, current_distance = self._compute_travel_distance()
+        if current_distance > 0.0 and current_distance != total_distance:
+            self.distance_status_bar['text'] = f"Distance: {current_distance:.2f} cm (current) / {total_distance:.2f} cm (total)"
+        else:
+            self.distance_status_bar['text'] = f"Distance: {total_distance:.2f} cm"
 
         # Update the data info for correct trajectory drawing about the frame.
         self.video_canvas.set_current_frame_id_for_trajectory(current_frame_id)
