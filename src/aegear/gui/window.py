@@ -41,6 +41,7 @@ class AegearMainWindow(tk.Tk):
     """
 
     ONE_LINE_HEIGHT = 16  # Will be updated based on the listbox font height.
+    TRAJECTORY_SMOOTH_SIZE = 9 # Default smoothing size for trajectory.
 
     def __init__(self):
         super(AegearMainWindow, self).__init__()
@@ -66,7 +67,6 @@ class AegearMainWindow(tk.Tk):
         self._fish_tracking = {}
         self._sorted_tracked_frame_ids = []
         self._outlier_frames = []
-        self._trajectory_smooth_size = 5
         self._screen_points = []
         self._num_frames = 100
         self._clip = None
@@ -288,12 +288,6 @@ class AegearMainWindow(tk.Tk):
         self.detection_threshold_scale.set(
             int(self._tracker.detection_threshold * 100.0))
         self.detection_threshold_scale.pack(
-            side=tk.TOP, fill=tk.X, pady=1, padx=5)
-
-        self.smooth_trajectory_scale = tk.Scale(track_params_frame, from_=1, to=100, orient=tk.HORIZONTAL,
-                                                label="Trajectory Smoothing", command=self._trajectory_smooth_size_changed)
-        self.smooth_trajectory_scale.set(self._trajectory_smooth_size)
-        self.smooth_trajectory_scale.pack(
             side=tk.TOP, fill=tk.X, pady=1, padx=5)
 
         self.tracking_frame_scale = tk.Scale(
@@ -728,19 +722,6 @@ class AegearMainWindow(tk.Tk):
     def _detection_threshold_changed(self, value):
         """Update the detection threshold for the fish tracker."""
         self._tracker.detection_threshold = float(value) / 100.0
-
-    def _trajectory_smooth_size_changed(self, value):
-        """
-        Update the smoothing size for trajectory.
-        Enforces an odd value for the smoothing kernel.
-        """
-        v = int(value)
-        if v % 2 == 0:  # Ensure the smoothing size is odd.
-            v += 1
-        self._trajectory_smooth_size = v
-        self.smooth_trajectory_scale.set(v)
-
-        self.update_gui()
 
     def _trajectory_frame_skip_changed(self, value):
         """Update the frame skip value used during tracking."""
@@ -1193,9 +1174,9 @@ class AegearMainWindow(tk.Tk):
         t_min = current_frame_id - window_frames
         start_idx = bisect.bisect_left(time_stamps, t_min)
         window_chunk = all_traj[start_idx:]
-        if len(window_chunk) >= self._trajectory_smooth_size:
+        if len(window_chunk) >= AegearMainWindow.TRAJECTORY_SMOOTH_SIZE:
             smoothed_chunk = smooth_trajectory(
-                window_chunk, self._trajectory_smooth_size)
+                window_chunk, AegearMainWindow.TRAJECTORY_SMOOTH_SIZE)
         else:
             smoothed_chunk = window_chunk
         # Still require at least 2 points in the visible chunk
