@@ -18,8 +18,8 @@ data_files = [
     ("media/logo.png", "media"),
     ("config/calibration.xml", "config"),
     ("models/model_cnn3_2023-08-16.pth", "models"),
-    ("models/model_efficient_unet_2025-05-11.pth", "models"),
-    ("models/model_siamese_2025-05-12.pth", "models"),
+    ("models/model_efficient_unet_2025-05-26.pth", "models"),
+    ("models/model_siamese_2025-05-26.pth", "models"),
 ]
 
 block_cipher = None
