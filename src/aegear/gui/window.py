@@ -1014,12 +1014,13 @@ class AegearMainWindow(tk.Tk):
         """
         if self._clip is None:
 
-            self._current_frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+            self._current_frame = np.zeros((720, 1280, 3), dtype=np.uint8)
 
             # Load logo PNG
             logo_img = cv2.imread(resource_path(
                 "media/logo.png"), cv2.IMREAD_UNCHANGED)
             if logo_img is not None:
+                logo_img = cv2.resize(logo_img, None, fx=0.5, fy=0.5)
                 logo_img = cv2.cvtColor(logo_img, cv2.COLOR_BGRA2RGBA)
                 h, w = logo_img.shape[:2]
                 bh, bw = self._current_frame.shape[:2]
