@@ -92,9 +92,17 @@ class SceneCalibration:
         sample_pts = np.array(screen_pts, dtype=np.float32)
         assert sample_pts.shape == (4, 2), "Screen points must be a 4x2 array"
 
-        img_scaling_factor = (sample_pts[1, 0] - sample_pts[0, 0]) / (
-            self._scene_reference[1, 0] - self._scene_reference[0, 0]
-        )
+        sample_pts = cv2.undistortPoints(
+            np.array(sample_pts, dtype=np.float32).reshape(-1, 1, 2),
+            self.mtx,
+            self.dist,
+            P=self.mtx
+        ).reshape(-1, 2) # Reshape to (N, 2) for direct use
+
+        sample_avg_scale = np.mean(np.linalg.norm(np.diff(sample_pts, axis=0)))
+        scene_avg_scale = np.mean(np.linalg.norm(np.diff(self._scene_reference, axis=0)))
+
+        img_scaling_factor = sample_avg_scale / scene_avg_scale 
 
         # move points to match starting x position of samples, and scale up to image scale
         transformed_real_pts = self._scene_reference * img_scaling_factor + sample_pts[0, :]
@@ -112,9 +120,8 @@ class SceneCalibration:
         sample_pts = sample_pts[:, 0:2] / sample_pts[:, 2].reshape((4, 1))
 
         # now calculate pixel to cm ratio
-        pixel_to_cm_ratio = np.linalg.norm(self._scene_reference[1, :] - self._scene_reference[0, :]) / np.linalg.norm(
-            sample_pts[1, :] - sample_pts[0, :]
-        )
+        sample_avg_scale = np.mean(np.linalg.norm(np.diff(sample_pts, axis=0)))
+        pixel_to_cm_ratio = scene_avg_scale / sample_avg_scale
 
         self._perspectiveTransform = persp_T
 
