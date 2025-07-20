@@ -20,3 +20,4 @@ paper/
 src/aegear.egg-info/
 data/models/
 package_build/
+site/

@@ -9,3 +9,6 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Usage: usage.md
+  - Calibration: calibration.md
+  - Training: training.md
+  - Docker: docker.md
