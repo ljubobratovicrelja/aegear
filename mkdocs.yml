@@ -12,3 +12,7 @@ nav:
   - Calibration: calibration.md
   - Training: training.md
   - Docker: docker.md
+  - API: api.md
+plugins:
+  - search
+  - mkdocstrings
