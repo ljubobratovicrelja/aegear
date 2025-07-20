@@ -1,0 +1,11 @@
+site_name: Aegear
+site_url: https://ljubobratovicrelja.github.io/aegear/
+repo_url: https://github.com/ljubobratovicrelja/aegear
+theme:
+  name: material
+  logo: media/logo_small.png
+  favicon: media/logo_favicon.png
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md

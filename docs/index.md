@@ -3,10 +3,8 @@
 
 **Tracking and analyzing fish behavior in controlled aquaculture environments**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)[![PyPI](https://img.shields.io/badge/pypi-coming_soon-orange.svg)](#)
-
 <p align="center">
-  <img src="docs/media/logo.png" alt="ÆGEAR Logo" width="35%"/>
+  <img src="media/logo.png" alt="ÆGEAR Logo" width="35%"/>
 </p>
 
 ---
@@ -24,8 +22,8 @@ The name **Aegear** references **Ægir**, the Norse god of the sea, symbolizing 
 
 
 <p align="center">
-  <img src="docs/media/1.png" alt="Dense Tank" width="45%" style="margin-right:2%;"/>
-  <img src="docs/media/2.png" alt="Open Arena" width="45%"/>
+  <img src="media/1.png" alt="Dense Tank" width="45%" style="margin-right:2%;"/>
+  <img src="media/2.png" alt="Open Arena" width="45%"/>
 </p>
 
 ---
