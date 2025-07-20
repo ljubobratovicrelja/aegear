@@ -8,23 +8,25 @@
       
       
       
-        <link rel="canonical" href="https://ljubobratovicrelja.github.io/aegear/">
+        <link rel="canonical" href="https://ljubobratovicrelja.github.io/aegear/training/">
       
       
+        <link rel="prev" href="../calibration/">
       
-        <link rel="next" href="installation/">
+      
+        <link rel="next" href="../docker/">
       
       
-      <link rel="icon" href="media/logo_favicon.png">
+      <link rel="icon" href="../media/logo_favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.15">
     
     
       
-        <title>Aegear</title>
+        <title>Training - Aegear</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.342714a4.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.342714a4.min.css">
       
       
 
@@ -43,7 +45,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -62,7 +64,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#aegear" class="md-skip">
+        <a href="#network-training-overview" class="md-skip">
           Skip to content
         </a>
       
@@ -78,9 +80,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Aegear" class="md-header__button md-logo" aria-label="Aegear" data-md-component="logo">
+    <a href=".." title="Aegear" class="md-header__button md-logo" aria-label="Aegear" data-md-component="logo">
       
-  <img src="media/logo_small.png" alt="logo">
+  <img src="../media/logo_small.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -97,7 +99,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Training
             
           </span>
         </div>
@@ -187,9 +189,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Aegear" class="md-nav__button md-logo" aria-label="Aegear" data-md-component="logo">
+    <a href=".." title="Aegear" class="md-nav__button md-logo" aria-label="Aegear" data-md-component="logo">
       
-  <img src="media/logo_small.png" alt="logo">
+  <img src="../media/logo_small.png" alt="logo">
 
     </a>
     Aegear
@@ -213,6 +215,94 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Calibration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -230,7 +320,7 @@
   
   
   <span class="md-ellipsis">
-    Home
+    Training
     
   </span>
   
@@ -238,12 +328,12 @@
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <a href="." class="md-nav__link md-nav__link--active">
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
   <span class="md-ellipsis">
-    Home
+    Training
     
   </span>
   
@@ -266,45 +356,69 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#project-overview" class="md-nav__link">
+  <a href="#networks-overview" class="md-nav__link">
     <span class="md-ellipsis">
-      🧠 Project Overview
+      📦 Networks Overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📦 Networks Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-efficientunet-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      1️⃣ EfficientUNet (Detection)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-siamese-tracker-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      2️⃣ Siamese Tracker (Tracking)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dataset-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗂️ Dataset Setup
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#project-overview_1" class="md-nav__link">
+  <a href="#training-scripts" class="md-nav__link">
     <span class="md-ellipsis">
-      🔬 Project Overview
+      🔥 Training Scripts
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#current-limitations" class="md-nav__link">
+  <a href="#training-on-custom-dataset" class="md-nav__link">
     <span class="md-ellipsis">
-      🚧 Current Limitations
+      🚀 Training on Custom Dataset
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#contributions-collaboration" class="md-nav__link">
+  <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
-      🤝 Contributions &amp; Collaboration
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#license" class="md-nav__link">
-    <span class="md-ellipsis">
-      📜 License
+      📖 Notes
     </span>
   </a>
   
@@ -313,7 +427,7 @@
         <li class="md-nav__item">
   <a href="#references" class="md-nav__link">
     <span class="md-ellipsis">
-      📖 References
+      📜 References
     </span>
   </a>
   
@@ -334,95 +448,7 @@
   
   
     <li class="md-nav__item">
-      <a href="installation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Installation
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="usage/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Usage
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="calibration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Calibration
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="training/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Training
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="docker/" class="md-nav__link">
+      <a href="../docker/" class="md-nav__link">
         
   
   
@@ -464,45 +490,69 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#project-overview" class="md-nav__link">
+  <a href="#networks-overview" class="md-nav__link">
     <span class="md-ellipsis">
-      🧠 Project Overview
+      📦 Networks Overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📦 Networks Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-efficientunet-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      1️⃣ EfficientUNet (Detection)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-siamese-tracker-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      2️⃣ Siamese Tracker (Tracking)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dataset-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      🗂️ Dataset Setup
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#project-overview_1" class="md-nav__link">
+  <a href="#training-scripts" class="md-nav__link">
     <span class="md-ellipsis">
-      🔬 Project Overview
+      🔥 Training Scripts
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#current-limitations" class="md-nav__link">
+  <a href="#training-on-custom-dataset" class="md-nav__link">
     <span class="md-ellipsis">
-      🚧 Current Limitations
+      🚀 Training on Custom Dataset
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#contributions-collaboration" class="md-nav__link">
+  <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
-      🤝 Contributions &amp; Collaboration
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#license" class="md-nav__link">
-    <span class="md-ellipsis">
-      📜 License
+      📖 Notes
     </span>
   </a>
   
@@ -511,7 +561,7 @@
         <li class="md-nav__item">
   <a href="#references" class="md-nav__link">
     <span class="md-ellipsis">
-      📖 References
+      📜 References
     </span>
   </a>
   
@@ -536,65 +586,135 @@
   
 
 
-<h1 id="aegear">Aegear</h1>
-<p><strong>Tracking and analyzing fish behavior in controlled aquaculture environments</strong></p>
-<p align="center">
-  <img src="media/logo.png" alt="ÆGEAR Logo" width="35%"/>
-</p>
-
+<h1 id="network-training-overview">🏋️‍♂️ Network Training Overview</h1>
+<p>This page provides an overview of the training process for Aegear's neural networks, including details on datasets, model architectures, and a guide for training on custom datasets.</p>
 <hr />
-<h2 id="project-overview">🧠 Project Overview</h2>
-<p><strong>Aegear</strong> is a computer vision toolkit developed for the analysis of fish locomotion in controlled aquaculture environments. Originally designed for behavioral studies on juvenile Russian sturgeon (<em>Acipenser gueldenstaedtii</em>), the system enables robust detection and tracking of individual fish across a range of experimental conditions, including tanks with textured floors and heterogeneous lighting.</p>
-<p>The toolkit addresses the need for accurate, reproducible behavioral metrics in video-based aquaculture experiments. It provides a complete pipeline for fish localization, trajectory tracking, scene calibration, and data augmentation — with a focus on modularity, reusability, and extensibility to other species and experimental setups.</p>
-<p>The name <strong>Aegear</strong> references <strong>Ægir</strong>, the Norse god of the sea, symbolizing the system's focus on aquatic environments, while also invoking <em>eye-gear</em> — a metaphor for visual instrumentation and observation.</p>
-<hr />
-<p align="center">
-  <img src="media/1.png" alt="Dense Tank" width="45%" style="margin-right:2%;"/>
-  <img src="media/2.png" alt="Open Arena" width="45%"/>
-</p>
-
-<hr />
-<h2 id="project-overview_1">🔬 Project Overview</h2>
-<p>Aegear is a computer vision toolkit for detecting and tracking fish in aquaculture environments. Initially applied in the doctoral research of Georgina Fazekas (2020– ), which investigated how environmental and feeding strategies affect the swimming activity of juvenile sturgeons (Acipenser gueldenstaedtii, A. ruthenus), Aegear was developed to address the limitations of existing animal tracking tools in real-world aquaculture conditions. Unlike systems such as idtracker.ai (Romero-Ferrero et al., 2018), which require clean backgrounds and controlled lighting, Aegear is designed for noisy environments with textured floors, variable illumination, and water reflections.</p>
-<p>At its core, Aegear integrates a U-Net-style detection network with an EfficientNet-B0 encoder backbone, specialized through transfer learning on custom tank recordings. For tracking, the same backbone extends into a Siamese network architecture that associates detections across frames, enabling appearance-based localization without manual re-identification. This combination ensures robust trajectory reconstruction even in complex scenes.</p>
-<p>The toolkit also includes camera calibration routines for intrinsic parameter estimation and extrinsic metric scaling from four predefined scene reference points, allowing trajectories to be expressed in real-world metric units (e.g., centimeters).</p>
-<hr />
-<h2 id="current-limitations">🚧 Current Limitations</h2>
+<h2 id="networks-overview">📦 Networks Overview</h2>
+<p>Aegear uses two deep learning models:  </p>
+<h3 id="1-efficientunet-detection">1️⃣ EfficientUNet (Detection)</h3>
 <ul>
-<li>Currently limited to <strong>single-object tracking</strong>; no support yet for multi-class or multi-fish tracking.</li>
-<li>The detection model is trained on sterlet (<em>Acipenser ruthenus</em>) and Russian sturgeon (<em>Acipenser gueldenstaedtii</em>) video data and likely requires additional training for species with significantly different shapes or swimming patterns.</li>
+<li><strong>Architecture</strong>: U-Net-style with an <strong>EfficientNet-B0 encoder</strong> and integrated <strong>Convolutional Block Attention Module (CBAM)</strong> for channel and spatial attention refinement.</li>
+<li><strong>Encoder</strong>: Pretrained on ImageNet, early layers frozen during training to preserve general visual features.</li>
+<li><strong>Decoder</strong>: Transposed convolutions with skip connections for spatial resolution recovery.</li>
+<li><strong>Output</strong>: Single-channel heatmap indicating fish presence and location.</li>
+<li><strong>Loss Function</strong>:</li>
+<li>Weighted binary cross-entropy for class imbalance.</li>
+<li>Centroid distance penalty to improve spatial accuracy.</li>
+</ul>
+<h3 id="2-siamese-tracker-tracking">2️⃣ Siamese Tracker (Tracking)</h3>
+<ul>
+<li><strong>Architecture</strong>: Siamese network sharing the same EfficientNet-B0 + CBAM backbone.</li>
+<li><strong>Inputs</strong>: Template (last ROI) and search region (current ROI).</li>
+<li><strong>Output</strong>: High-resolution response heatmap for localization.</li>
+<li><strong>Loss Function</strong>:</li>
+<li>Response map peak loss (cross-entropy and L2 penalty).</li>
 </ul>
 <hr />
-<h2 id="contributions-collaboration">🤝 Contributions &amp; Collaboration</h2>
-<p>Aegear was originally developed around a single research project in controlled aquaculture environments. While it is currently tailored to tracking fish under specific conditions, we envision Aegear growing into a more general-purpose toolkit for animal tracking in both <strong>academic</strong> and <strong>industrial</strong> settings.</p>
-<p>We warmly invite:<br />
-- 🧑‍🔬 Researchers in <strong>biology, ethology, aquaculture</strong>, or other animal behavior fields<br />
-- 🏭 Practitioners in <strong>industrial monitoring of animal populations</strong><br />
-to explore Aegear and contact us for support or potential collaboration.  </p>
-<p>If your use case involves different species, environments, or tracking requirements, we are happy to:<br />
-- Extend Aegear for broader animal tracking scenarios<br />
-- Discuss customizations and new features<br />
-- Work together on shared challenges in visual tracking systems  </p>
-<blockquote>
-<p>📌 <strong>Feature Requests:</strong> Open a GitHub issue if you require specific capabilities not yet available. We will prioritize these to make Aegear a useful resource for the wider community.</p>
-</blockquote>
+<h2 id="dataset-setup">🗂️ Dataset Setup</h2>
+<p>The datasets are defined in <code>aegear.datasets</code> and support flexible configurations:  </p>
+<ul>
+<li><strong>FishHeatmapDataset</strong></li>
+<li>Used for U-Net training.</li>
+<li>Inputs: Grayscale or RGB video frames.</li>
+<li>
+<p>Labels: Gaussian-blurred fish centroids as heatmaps.</p>
+</li>
+<li>
+<p><strong>SiameseFishDataset</strong></p>
+</li>
+<li>Used for Siamese tracker training.</li>
+<li>Pairs template and search images with offset targets.</li>
+</ul>
+<p><strong>Data Augmentations</strong>:</p>
+<ul>
+<li>Random cropping and scaling.</li>
+<li>Flips and rotations.</li>
+<li>Brightness and contrast adjustments.</li>
+</ul>
+<p><strong>📥 Public Dataset</strong>:</p>
+<p>A preprocessed dataset for our training is publicly available:</p>
+<ul>
+<li>
+<p><a href="https://storage.googleapis.com/aegear-training-data/cache/detection.zip">Detection (U-Net) Dataset</a></p>
+</li>
+<li>
+<p><a href="https://storage.googleapis.com/aegear-training-data/cache/tracking.zip">Tracking (Siamese) Dataset</a></p>
+</li>
+</ul>
 <hr />
-<h2 id="license">📜 License</h2>
-<p>This project is licensed under the <a href="LICENSE">MIT License</a>.</p>
-<h2 id="references">📖 References</h2>
-<blockquote>
-<p>Fazekas, G.: Investigating the effects of environmental factors and feeding strategies on early life development and behavior of Russian sturgeon (Acipenser gueldenstaedtii) and sterlet (A. ruthenus) [Doctoral thesis].
-Hungarian University of Agriculture and Life Sciences (MATE), Hungary.  </p>
-<p>Romero-Ferrero, F., Bergomi, M. G., Hinz, R., Heras, F. J. H., &amp; de Polavieja, G. G. (2018).
-idtracker.ai: tracking all individuals in small or large collectives of unmarked animals.
-Nature Methods, 16(2), 179–182. [arXiv:1803.04351]</p>
-<p>Tan, M., &amp; Le, Q. V. (2019).
-EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks.
-Proceedings of the 36th International Conference on Machine Learning, PMLR 97:6105–6114. arXiv:1905.11946</p>
-<p>Bertinetto, L., Valmadre, J., Henriques, J. F., Vedaldi, A., &amp; Torr, P. H. S. (2016).
-Fully-Convolutional Siamese Networks for Object Tracking.
-European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549</p>
-</blockquote>
+<h2 id="training-scripts">🔥 Training Scripts</h2>
+<p>Training scripts are located in the <code>notebooks/</code> directory:  </p>
+<table>
+<thead>
+<tr>
+<th>Notebook</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>training_unet.ipynb</code></td>
+<td>Train EfficientUNet</td>
+</tr>
+<tr>
+<td><code>training_siamese.ipynb</code></td>
+<td>Train Siamese Tracker</td>
+</tr>
+</tbody>
+</table>
+<p>Each notebook provides step-by-step setup for loading datasets, initializing models, defining optimizers, and launching training loops. They are Jupyter notebooks to allow easy modification for custom datasets.</p>
+<hr />
+<h2 id="training-on-custom-dataset">🚀 Training on Custom Dataset</h2>
+<p>To train Aegear on your own data:  </p>
+<ol>
+<li><strong>Prepare Dataset</strong>  </li>
+<li>Structure your dataset similarly to the existing <code>FishHeatmapDataset</code> and <code>SiameseFishDataset</code> expectations.</li>
+<li>For U-Net:<ul>
+<li>Frames and corresponding centroid annotations.</li>
+</ul>
+</li>
+<li>
+<p>For Siamese Tracker:</p>
+<ul>
+<li>Frame pairs with ground-truth offsets.</li>
+</ul>
+</li>
+<li>
+<p><strong>Edit Configuration</strong>  </p>
+</li>
+<li>
+<p>Update dataset paths and parameters in the training notebooks (<code>training_unet.ipynb</code>, <code>training_siamese.ipynb</code>).</p>
+</li>
+<li>
+<p><strong>Run Training</strong>  </p>
+</li>
+<li>
+<p>Launch Jupyter Notebook:
+     <code>bash
+     jupyter notebook notebooks/training_unet.ipynb
+     jupyter notebook notebooks/training_siamese.ipynb</code></p>
+</li>
+<li>
+<p><strong>Export Models</strong>  </p>
+</li>
+<li>Save trained weights in <code>data/models/</code> for Aegear to use in the GUI.</li>
+</ol>
+<hr />
+<h2 id="notes">📖 Notes</h2>
+<ul>
+<li>Training requires PyTorch with GPU support for reasonable performance.</li>
+<li>Pretrained EfficientNet-B0 weights are loaded automatically.</li>
+<li>CBAM modules enhance spatial and channel attention, improving performance in cluttered environments.</li>
+<li>Data augmentations are applied at runtime to improve generalization.</li>
+<li>The Siamese tracker is highly sensitive to template drift; careful dataset preparation is recommended.</li>
+</ul>
+<hr />
+<h2 id="references">📜 References</h2>
+<p>See the original papers for the underlying architectures:<br />
+- Woo, S., Park, J., Lee, J.-Y., &amp; Kweon, I. S. (2018). CBAM: Convolutional Block Attention Module. <a href="https://arxiv.org/abs/1807.06521">arXiv:1807.06521</a><br />
+- Tan, M., &amp; Le, Q. V. (2019). EfficientNet. <a href="https://arxiv.org/abs/1905.11946">arXiv:1905.11946</a><br />
+- Ronneberger, O., Fischer, P., &amp; Brox, T. (2015). U-Net. <a href="https://arxiv.org/abs/1505.04597">arXiv:1505.04597</a><br />
+- Bertinetto, L., et al. (2016). Fully-Convolutional Siamese Networks. <a href="https://arxiv.org/abs/1606.09549">arXiv:1606.09549</a></p>
 
 
 
@@ -643,10 +763,10 @@ European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549</p>
     
     
       
-      <script id="__config" type="application/json">{"base": ".", "features": [], "search": "assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.56ea9cef.min.js"></script>
+      <script src="../assets/javascripts/bundle.56ea9cef.min.js"></script>
       
     
   </body>

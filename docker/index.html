@@ -8,23 +8,23 @@
       
       
       
-        <link rel="canonical" href="https://ljubobratovicrelja.github.io/aegear/">
+        <link rel="canonical" href="https://ljubobratovicrelja.github.io/aegear/docker/">
+      
+      
+        <link rel="prev" href="../training/">
       
       
       
-        <link rel="next" href="installation/">
-      
-      
-      <link rel="icon" href="media/logo_favicon.png">
+      <link rel="icon" href="../media/logo_favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.15">
     
     
       
-        <title>Aegear</title>
+        <title>Docker - Aegear</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.342714a4.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.342714a4.min.css">
       
       
 
@@ -43,7 +43,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -62,7 +62,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#aegear" class="md-skip">
+        <a href="#docker-support" class="md-skip">
           Skip to content
         </a>
       
@@ -78,9 +78,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Aegear" class="md-header__button md-logo" aria-label="Aegear" data-md-component="logo">
+    <a href=".." title="Aegear" class="md-header__button md-logo" aria-label="Aegear" data-md-component="logo">
       
-  <img src="media/logo_small.png" alt="logo">
+  <img src="../media/logo_small.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -97,7 +97,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Docker
             
           </span>
         </div>
@@ -187,9 +187,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Aegear" class="md-nav__button md-logo" aria-label="Aegear" data-md-component="logo">
+    <a href=".." title="Aegear" class="md-nav__button md-logo" aria-label="Aegear" data-md-component="logo">
       
-  <img src="media/logo_small.png" alt="logo">
+  <img src="../media/logo_small.png" alt="logo">
 
     </a>
     Aegear
@@ -213,6 +213,116 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Calibration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../training/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Training
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -230,7 +340,7 @@
   
   
   <span class="md-ellipsis">
-    Home
+    Docker
     
   </span>
   
@@ -238,12 +348,12 @@
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <a href="." class="md-nav__link md-nav__link--active">
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
   <span class="md-ellipsis">
-    Home
+    Docker
     
   </span>
   
@@ -266,54 +376,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#project-overview" class="md-nav__link">
+  <a href="#public-docker-image" class="md-nav__link">
     <span class="md-ellipsis">
-      🧠 Project Overview
+      📦 Public Docker Image
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#project-overview_1" class="md-nav__link">
+  <a href="#running-the-image" class="md-nav__link">
     <span class="md-ellipsis">
-      🔬 Project Overview
+      🚀 Running the Image
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#current-limitations" class="md-nav__link">
+  <a href="#custom-training-with-docker" class="md-nav__link">
     <span class="md-ellipsis">
-      🚧 Current Limitations
+      🛠 Custom Training with Docker
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#contributions-collaboration" class="md-nav__link">
+  <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
-      🤝 Contributions &amp; Collaboration
+      📖 Notes
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#license" class="md-nav__link">
+  <a href="#source-dockerfile" class="md-nav__link">
     <span class="md-ellipsis">
-      📜 License
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    <span class="md-ellipsis">
-      📖 References
+      📦 Source Dockerfile
     </span>
   </a>
   
@@ -323,116 +424,6 @@
   
 </nav>
       
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="installation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Installation
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="usage/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Usage
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="calibration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Calibration
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="training/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Training
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="docker/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Docker
-    
-  </span>
-  
-
-      </a>
     </li>
   
 
@@ -464,54 +455,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#project-overview" class="md-nav__link">
+  <a href="#public-docker-image" class="md-nav__link">
     <span class="md-ellipsis">
-      🧠 Project Overview
+      📦 Public Docker Image
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#project-overview_1" class="md-nav__link">
+  <a href="#running-the-image" class="md-nav__link">
     <span class="md-ellipsis">
-      🔬 Project Overview
+      🚀 Running the Image
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#current-limitations" class="md-nav__link">
+  <a href="#custom-training-with-docker" class="md-nav__link">
     <span class="md-ellipsis">
-      🚧 Current Limitations
+      🛠 Custom Training with Docker
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#contributions-collaboration" class="md-nav__link">
+  <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
-      🤝 Contributions &amp; Collaboration
+      📖 Notes
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#license" class="md-nav__link">
+  <a href="#source-dockerfile" class="md-nav__link">
     <span class="md-ellipsis">
-      📜 License
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    <span class="md-ellipsis">
-      📖 References
+      📦 Source Dockerfile
     </span>
   </a>
   
@@ -536,65 +518,76 @@
   
 
 
-<h1 id="aegear">Aegear</h1>
-<p><strong>Tracking and analyzing fish behavior in controlled aquaculture environments</strong></p>
-<p align="center">
-  <img src="media/logo.png" alt="ÆGEAR Logo" width="35%"/>
-</p>
-
+<h1 id="docker-support">🐳 Docker Support</h1>
+<p>Aegear provides a ready-to-use Docker image to simplify deployment and training in cloud environments or on systems without a configured Python environment.</p>
 <hr />
-<h2 id="project-overview">🧠 Project Overview</h2>
-<p><strong>Aegear</strong> is a computer vision toolkit developed for the analysis of fish locomotion in controlled aquaculture environments. Originally designed for behavioral studies on juvenile Russian sturgeon (<em>Acipenser gueldenstaedtii</em>), the system enables robust detection and tracking of individual fish across a range of experimental conditions, including tanks with textured floors and heterogeneous lighting.</p>
-<p>The toolkit addresses the need for accurate, reproducible behavioral metrics in video-based aquaculture experiments. It provides a complete pipeline for fish localization, trajectory tracking, scene calibration, and data augmentation — with a focus on modularity, reusability, and extensibility to other species and experimental setups.</p>
-<p>The name <strong>Aegear</strong> references <strong>Ægir</strong>, the Norse god of the sea, symbolizing the system's focus on aquatic environments, while also invoking <em>eye-gear</em> — a metaphor for visual instrumentation and observation.</p>
+<h2 id="public-docker-image">📦 Public Docker Image</h2>
+<p>The official Aegear Docker image is hosted on Docker Hub:  </p>
+<pre><code>ljubobratovicrelja/aegear:latest
+</code></pre>
+<p>Pull the image with:  </p>
+<pre><code class="language-bash">docker pull ljubobratovicrelja/aegear:latest
+</code></pre>
 <hr />
-<p align="center">
-  <img src="media/1.png" alt="Dense Tank" width="45%" style="margin-right:2%;"/>
-  <img src="media/2.png" alt="Open Arena" width="45%"/>
-</p>
-
+<h2 id="running-the-image">🚀 Running the Image</h2>
+<p>Launch a container with GPU support (if available):  </p>
+<pre><code class="language-bash">docker run --gpus all -it ljubobratovicrelja/aegear:latest
+</code></pre>
+<p>To mount a local directory for accessing datasets or saving models:  </p>
+<pre><code class="language-bash">docker run --gpus all -it -v /path/to/data:/workspace/data ljubobratovicrelja/aegear:latest
+</code></pre>
+<p>This will mount <code>/path/to/data</code> on your host to <code>/workspace/data</code> inside the container.</p>
 <hr />
-<h2 id="project-overview_1">🔬 Project Overview</h2>
-<p>Aegear is a computer vision toolkit for detecting and tracking fish in aquaculture environments. Initially applied in the doctoral research of Georgina Fazekas (2020– ), which investigated how environmental and feeding strategies affect the swimming activity of juvenile sturgeons (Acipenser gueldenstaedtii, A. ruthenus), Aegear was developed to address the limitations of existing animal tracking tools in real-world aquaculture conditions. Unlike systems such as idtracker.ai (Romero-Ferrero et al., 2018), which require clean backgrounds and controlled lighting, Aegear is designed for noisy environments with textured floors, variable illumination, and water reflections.</p>
-<p>At its core, Aegear integrates a U-Net-style detection network with an EfficientNet-B0 encoder backbone, specialized through transfer learning on custom tank recordings. For tracking, the same backbone extends into a Siamese network architecture that associates detections across frames, enabling appearance-based localization without manual re-identification. This combination ensures robust trajectory reconstruction even in complex scenes.</p>
-<p>The toolkit also includes camera calibration routines for intrinsic parameter estimation and extrinsic metric scaling from four predefined scene reference points, allowing trajectories to be expressed in real-world metric units (e.g., centimeters).</p>
+<h2 id="custom-training-with-docker">🛠 Custom Training with Docker</h2>
+<p>The public image includes all dependencies for running Aegear and training on the provided dataset. For custom datasets or workflows:  </p>
+<ol>
+<li>
+<p><strong>Clone and Extend</strong><br />
+   Clone the Aegear repository and modify the Dockerfile as needed:<br />
+<code>bash
+   git clone https://github.com/ljubobratovicrelja/aegear.git
+   cd aegear
+   docker build -t aegear-custom .</code></p>
+</li>
+<li>
+<p><strong>Custom Parameters</strong><br />
+   When launching the container, you can specify:  </p>
+</li>
+<li><strong>Which notebook</strong> to use (<code>training_unet.ipynb</code> or <code>training_siamese.ipynb</code>)</li>
+<li><strong>Which branch</strong> of the repository (defaults to <code>main</code>)  </li>
+</ol>
+<p>Example:<br />
+<code>bash
+   docker run --gpus all -e NOTEBOOK=training_siamese.ipynb -e BRANCH=dev -it ljubobratovicrelja/aegear:latest</code></p>
+<blockquote>
+<p>📌 Currently, this works for the main repository. Support for forks can be added easily by adjusting the Dockerfile’s repository source.</p>
+</blockquote>
+<ol>
+<li>
+<p><strong>Mount Your Data</strong><br />
+   Mount your dataset and configuration files into the container using <code>-v</code>.</p>
+</li>
+<li>
+<p><strong>Run Training Scripts</strong><br />
+   Inside the container, launch Jupyter notebooks or Python scripts from the <code>notebooks/</code> directory:<br />
+<code>bash
+   jupyter notebook notebooks/training_unet.ipynb
+   jupyter notebook notebooks/training_siamese.ipynb</code></p>
+</li>
+</ol>
 <hr />
-<h2 id="current-limitations">🚧 Current Limitations</h2>
+<h2 id="notes">📖 Notes</h2>
 <ul>
-<li>Currently limited to <strong>single-object tracking</strong>; no support yet for multi-class or multi-fish tracking.</li>
-<li>The detection model is trained on sterlet (<em>Acipenser ruthenus</em>) and Russian sturgeon (<em>Acipenser gueldenstaedtii</em>) video data and likely requires additional training for species with significantly different shapes or swimming patterns.</li>
+<li><strong>GPU Support</strong>: Requires NVIDIA drivers and Docker with NVIDIA runtime (<code>nvidia-docker2</code>).</li>
+<li><strong>Cloud Deployment</strong>: Compatible with Google Cloud, AWS, and Azure GPU instances.</li>
+<li><strong>Extending</strong>: For additional libraries or dependencies, create a new Dockerfile based on <code>ljubobratovicrelja/aegear:latest</code>.</li>
 </ul>
 <hr />
-<h2 id="contributions-collaboration">🤝 Contributions &amp; Collaboration</h2>
-<p>Aegear was originally developed around a single research project in controlled aquaculture environments. While it is currently tailored to tracking fish under specific conditions, we envision Aegear growing into a more general-purpose toolkit for animal tracking in both <strong>academic</strong> and <strong>industrial</strong> settings.</p>
-<p>We warmly invite:<br />
-- 🧑‍🔬 Researchers in <strong>biology, ethology, aquaculture</strong>, or other animal behavior fields<br />
-- 🏭 Practitioners in <strong>industrial monitoring of animal populations</strong><br />
-to explore Aegear and contact us for support or potential collaboration.  </p>
-<p>If your use case involves different species, environments, or tracking requirements, we are happy to:<br />
-- Extend Aegear for broader animal tracking scenarios<br />
-- Discuss customizations and new features<br />
-- Work together on shared challenges in visual tracking systems  </p>
-<blockquote>
-<p>📌 <strong>Feature Requests:</strong> Open a GitHub issue if you require specific capabilities not yet available. We will prioritize these to make Aegear a useful resource for the wider community.</p>
-</blockquote>
-<hr />
-<h2 id="license">📜 License</h2>
-<p>This project is licensed under the <a href="LICENSE">MIT License</a>.</p>
-<h2 id="references">📖 References</h2>
-<blockquote>
-<p>Fazekas, G.: Investigating the effects of environmental factors and feeding strategies on early life development and behavior of Russian sturgeon (Acipenser gueldenstaedtii) and sterlet (A. ruthenus) [Doctoral thesis].
-Hungarian University of Agriculture and Life Sciences (MATE), Hungary.  </p>
-<p>Romero-Ferrero, F., Bergomi, M. G., Hinz, R., Heras, F. J. H., &amp; de Polavieja, G. G. (2018).
-idtracker.ai: tracking all individuals in small or large collectives of unmarked animals.
-Nature Methods, 16(2), 179–182. [arXiv:1803.04351]</p>
-<p>Tan, M., &amp; Le, Q. V. (2019).
-EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks.
-Proceedings of the 36th International Conference on Machine Learning, PMLR 97:6105–6114. arXiv:1905.11946</p>
-<p>Bertinetto, L., Valmadre, J., Henriques, J. F., Vedaldi, A., &amp; Torr, P. H. S. (2016).
-Fully-Convolutional Siamese Networks for Object Tracking.
-European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549</p>
-</blockquote>
+<h2 id="source-dockerfile">📦 Source Dockerfile</h2>
+<p>The Dockerfile used to build the public image is included in the repository at:  </p>
+<pre><code>aegear/Dockerfile
+</code></pre>
+<p>This can serve as a starting point for creating your own custom images.</p>
 
 
 
@@ -643,10 +636,10 @@ European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549</p>
     
     
       
-      <script id="__config" type="application/json">{"base": ".", "features": [], "search": "assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.56ea9cef.min.js"></script>
+      <script src="../assets/javascripts/bundle.56ea9cef.min.js"></script>
       
     
   </body>

@@ -8,23 +8,25 @@
       
       
       
-        <link rel="canonical" href="https://ljubobratovicrelja.github.io/aegear/">
+        <link rel="canonical" href="https://ljubobratovicrelja.github.io/aegear/calibration/">
       
       
+        <link rel="prev" href="../usage/">
       
-        <link rel="next" href="installation/">
+      
+        <link rel="next" href="../training/">
       
       
-      <link rel="icon" href="media/logo_favicon.png">
+      <link rel="icon" href="../media/logo_favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.15">
     
     
       
-        <title>Aegear</title>
+        <title>Calibration - Aegear</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.342714a4.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.342714a4.min.css">
       
       
 
@@ -43,7 +45,7 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -62,7 +64,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#aegear" class="md-skip">
+        <a href="#camera-and-scene-calibration" class="md-skip">
           Skip to content
         </a>
       
@@ -78,9 +80,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Aegear" class="md-header__button md-logo" aria-label="Aegear" data-md-component="logo">
+    <a href=".." title="Aegear" class="md-header__button md-logo" aria-label="Aegear" data-md-component="logo">
       
-  <img src="media/logo_small.png" alt="logo">
+  <img src="../media/logo_small.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -97,7 +99,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Calibration
             
           </span>
         </div>
@@ -187,9 +189,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Aegear" class="md-nav__button md-logo" aria-label="Aegear" data-md-component="logo">
+    <a href=".." title="Aegear" class="md-nav__button md-logo" aria-label="Aegear" data-md-component="logo">
       
-  <img src="media/logo_small.png" alt="logo">
+  <img src="../media/logo_small.png" alt="logo">
 
     </a>
     Aegear
@@ -213,6 +215,72 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Usage
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -230,7 +298,7 @@
   
   
   <span class="md-ellipsis">
-    Home
+    Calibration
     
   </span>
   
@@ -238,12 +306,12 @@
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <a href="." class="md-nav__link md-nav__link--active">
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
   <span class="md-ellipsis">
-    Home
+    Calibration
     
   </span>
   
@@ -266,54 +334,69 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#project-overview" class="md-nav__link">
+  <a href="#scene-calibration-gui" class="md-nav__link">
     <span class="md-ellipsis">
-      🧠 Project Overview
+      🎯 Scene Calibration (GUI)
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#project-overview_1" class="md-nav__link">
+  <a href="#lens-calibration-intrinsic-calibration" class="md-nav__link">
     <span class="md-ellipsis">
-      🔬 Project Overview
+      📷 Lens Calibration (Intrinsic Calibration)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📷 Lens Calibration (Intrinsic Calibration)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calibration-descriptor-calibration_descriptorjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      📑 Calibration Descriptor (calibration_descriptor.json)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      🏃 Steps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-aegear" class="md-nav__link">
+    <span class="md-ellipsis">
+      📦 Update Aegear
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-scene-vs-lens-calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔑 Summary: Scene vs Lens Calibration
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#current-limitations" class="md-nav__link">
+  <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
-      🚧 Current Limitations
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#contributions-collaboration" class="md-nav__link">
-    <span class="md-ellipsis">
-      🤝 Contributions &amp; Collaboration
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#license" class="md-nav__link">
-    <span class="md-ellipsis">
-      📜 License
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    <span class="md-ellipsis">
-      📖 References
+      📝 Notes
     </span>
   </a>
   
@@ -334,73 +417,7 @@
   
   
     <li class="md-nav__item">
-      <a href="installation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Installation
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="usage/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Usage
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="calibration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Calibration
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="training/" class="md-nav__link">
+      <a href="../training/" class="md-nav__link">
         
   
   
@@ -422,7 +439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="docker/" class="md-nav__link">
+      <a href="../docker/" class="md-nav__link">
         
   
   
@@ -464,54 +481,69 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#project-overview" class="md-nav__link">
+  <a href="#scene-calibration-gui" class="md-nav__link">
     <span class="md-ellipsis">
-      🧠 Project Overview
+      🎯 Scene Calibration (GUI)
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#project-overview_1" class="md-nav__link">
+  <a href="#lens-calibration-intrinsic-calibration" class="md-nav__link">
     <span class="md-ellipsis">
-      🔬 Project Overview
+      📷 Lens Calibration (Intrinsic Calibration)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📷 Lens Calibration (Intrinsic Calibration)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#calibration-descriptor-calibration_descriptorjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      📑 Calibration Descriptor (calibration_descriptor.json)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      🏃 Steps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-aegear" class="md-nav__link">
+    <span class="md-ellipsis">
+      📦 Update Aegear
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-scene-vs-lens-calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      🔑 Summary: Scene vs Lens Calibration
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#current-limitations" class="md-nav__link">
+  <a href="#notes" class="md-nav__link">
     <span class="md-ellipsis">
-      🚧 Current Limitations
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#contributions-collaboration" class="md-nav__link">
-    <span class="md-ellipsis">
-      🤝 Contributions &amp; Collaboration
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#license" class="md-nav__link">
-    <span class="md-ellipsis">
-      📜 License
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    <span class="md-ellipsis">
-      📖 References
+      📝 Notes
     </span>
   </a>
   
@@ -536,65 +568,140 @@
   
 
 
-<h1 id="aegear">Aegear</h1>
-<p><strong>Tracking and analyzing fish behavior in controlled aquaculture environments</strong></p>
-<p align="center">
-  <img src="media/logo.png" alt="ÆGEAR Logo" width="35%"/>
-</p>
-
+<h1 id="camera-and-scene-calibration">Camera and Scene Calibration</h1>
+<p>Aegear supports <strong>scene calibration</strong> directly in the GUI and provides a separate script for <strong>lens (intrinsic) calibration</strong>. This page explains the difference between the two, how to perform lens calibration using the integrated script, and how to update Aegear with new calibration data.</p>
 <hr />
-<h2 id="project-overview">🧠 Project Overview</h2>
-<p><strong>Aegear</strong> is a computer vision toolkit developed for the analysis of fish locomotion in controlled aquaculture environments. Originally designed for behavioral studies on juvenile Russian sturgeon (<em>Acipenser gueldenstaedtii</em>), the system enables robust detection and tracking of individual fish across a range of experimental conditions, including tanks with textured floors and heterogeneous lighting.</p>
-<p>The toolkit addresses the need for accurate, reproducible behavioral metrics in video-based aquaculture experiments. It provides a complete pipeline for fish localization, trajectory tracking, scene calibration, and data augmentation — with a focus on modularity, reusability, and extensibility to other species and experimental setups.</p>
-<p>The name <strong>Aegear</strong> references <strong>Ægir</strong>, the Norse god of the sea, symbolizing the system's focus on aquatic environments, while also invoking <em>eye-gear</em> — a metaphor for visual instrumentation and observation.</p>
-<hr />
-<p align="center">
-  <img src="media/1.png" alt="Dense Tank" width="45%" style="margin-right:2%;"/>
-  <img src="media/2.png" alt="Open Arena" width="45%"/>
-</p>
-
-<hr />
-<h2 id="project-overview_1">🔬 Project Overview</h2>
-<p>Aegear is a computer vision toolkit for detecting and tracking fish in aquaculture environments. Initially applied in the doctoral research of Georgina Fazekas (2020– ), which investigated how environmental and feeding strategies affect the swimming activity of juvenile sturgeons (Acipenser gueldenstaedtii, A. ruthenus), Aegear was developed to address the limitations of existing animal tracking tools in real-world aquaculture conditions. Unlike systems such as idtracker.ai (Romero-Ferrero et al., 2018), which require clean backgrounds and controlled lighting, Aegear is designed for noisy environments with textured floors, variable illumination, and water reflections.</p>
-<p>At its core, Aegear integrates a U-Net-style detection network with an EfficientNet-B0 encoder backbone, specialized through transfer learning on custom tank recordings. For tracking, the same backbone extends into a Siamese network architecture that associates detections across frames, enabling appearance-based localization without manual re-identification. This combination ensures robust trajectory reconstruction even in complex scenes.</p>
-<p>The toolkit also includes camera calibration routines for intrinsic parameter estimation and extrinsic metric scaling from four predefined scene reference points, allowing trajectories to be expressed in real-world metric units (e.g., centimeters).</p>
-<hr />
-<h2 id="current-limitations">🚧 Current Limitations</h2>
+<h2 id="scene-calibration-gui">🎯 Scene Calibration (GUI)</h2>
+<p>Scene calibration in Aegear maps the video’s pixel coordinates to real-world metric units (e.g., centimeters). This is achieved by selecting four reference points in the video that define the scale and orientation of the scene.</p>
 <ul>
-<li>Currently limited to <strong>single-object tracking</strong>; no support yet for multi-class or multi-fish tracking.</li>
-<li>The detection model is trained on sterlet (<em>Acipenser ruthenus</em>) and Russian sturgeon (<em>Acipenser gueldenstaedtii</em>) video data and likely requires additional training for species with significantly different shapes or swimming patterns.</li>
+<li><strong>Where?</strong>: Available in the Aegear GUI under the <em>Calibrate</em> button.</li>
+<li>
+<p><strong>What it does?</strong></p>
+<ul>
+<li>Computes a homography for planar mapping.</li>
+<li>Allows Aegear to report trajectories in metric units.</li>
 </ul>
-<hr />
-<h2 id="contributions-collaboration">🤝 Contributions &amp; Collaboration</h2>
-<p>Aegear was originally developed around a single research project in controlled aquaculture environments. While it is currently tailored to tracking fish under specific conditions, we envision Aegear growing into a more general-purpose toolkit for animal tracking in both <strong>academic</strong> and <strong>industrial</strong> settings.</p>
-<p>We warmly invite:<br />
-- 🧑‍🔬 Researchers in <strong>biology, ethology, aquaculture</strong>, or other animal behavior fields<br />
-- 🏭 Practitioners in <strong>industrial monitoring of animal populations</strong><br />
-to explore Aegear and contact us for support or potential collaboration.  </p>
-<p>If your use case involves different species, environments, or tracking requirements, we are happy to:<br />
-- Extend Aegear for broader animal tracking scenarios<br />
-- Discuss customizations and new features<br />
-- Work together on shared challenges in visual tracking systems  </p>
+</li>
+<li>
+<p><strong>Picking Reference Points</strong></p>
+<ul>
+<li>The user is asked to click 4 reference points in sequence. These should be picked in the order shown below.</li>
+</ul>
+</li>
+</ul>
+<p><img alt="Scene Reference Points" src="../media/maze_significant_vertices.png" /></p>
 <blockquote>
-<p>📌 <strong>Feature Requests:</strong> Open a GitHub issue if you require specific capabilities not yet available. We will prioritize these to make Aegear a useful resource for the wider community.</p>
+<p>🔴 Points 1–4 represent the corners of the reference area used for scaling and orientation.</p>
+<p>📌 <strong>Note</strong>: Custom scene reference points (beyond 4 corners) are not yet supported in the GUI. If you require this feature, please open a GitHub issue—we will prioritize adding it.</p>
+<p>📌 Scene calibration <strong>does not correct lens distortion</strong>.</p>
 </blockquote>
 <hr />
-<h2 id="license">📜 License</h2>
-<p>This project is licensed under the <a href="LICENSE">MIT License</a>.</p>
-<h2 id="references">📖 References</h2>
-<blockquote>
-<p>Fazekas, G.: Investigating the effects of environmental factors and feeding strategies on early life development and behavior of Russian sturgeon (Acipenser gueldenstaedtii) and sterlet (A. ruthenus) [Doctoral thesis].
-Hungarian University of Agriculture and Life Sciences (MATE), Hungary.  </p>
-<p>Romero-Ferrero, F., Bergomi, M. G., Hinz, R., Heras, F. J. H., &amp; de Polavieja, G. G. (2018).
-idtracker.ai: tracking all individuals in small or large collectives of unmarked animals.
-Nature Methods, 16(2), 179–182. [arXiv:1803.04351]</p>
-<p>Tan, M., &amp; Le, Q. V. (2019).
-EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks.
-Proceedings of the 36th International Conference on Machine Learning, PMLR 97:6105–6114. arXiv:1905.11946</p>
-<p>Bertinetto, L., Valmadre, J., Henriques, J. F., Vedaldi, A., &amp; Torr, P. H. S. (2016).
-Fully-Convolutional Siamese Networks for Object Tracking.
-European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549</p>
-</blockquote>
+<h2 id="lens-calibration-intrinsic-calibration">📷 Lens Calibration (Intrinsic Calibration)</h2>
+<p>Lens calibration, or intrinsic calibration, is a separate process that corrects optical distortions (e.g., barrel or pincushion distortion) and defines camera parameters.</p>
+<ul>
+<li><strong>Where?</strong>: Not yet available in the GUI.</li>
+<li><strong>Tool</strong>: Use the provided script:
+  <code>bash
+  python tools/calibration.py calibration_descriptor.json</code></li>
+</ul>
+<h3 id="calibration-descriptor-calibration_descriptorjson">📑 Calibration Descriptor (<code>calibration_descriptor.json</code>)</h3>
+<p>Example:</p>
+<pre><code class="language-json">{
+    &quot;videoPath&quot;: &quot;data/videos/2016_0718_200947_002.MOV&quot;,
+    &quot;calibrationDataPath&quot;: &quot;data/calibration.xml&quot;,
+    &quot;patternSize&quot;: [8, 6],
+    &quot;subPixWinSize&quot;: [5, 5],
+    &quot;patternSquareSideLength&quot;: 1.6,
+    &quot;skipFrames&quot;: 120
+}
+</code></pre>
+<p><strong>Fields:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>videoPath</code></td>
+<td>Path to calibration video (checkerboard pattern).</td>
+</tr>
+<tr>
+<td><code>calibrationDataPath</code></td>
+<td>Output XML file path for calibration data.</td>
+</tr>
+<tr>
+<td><code>patternSize</code></td>
+<td>Size of checkerboard grid (columns, rows).</td>
+</tr>
+<tr>
+<td><code>subPixWinSize</code></td>
+<td>Window size for corner refinement (pixels).</td>
+</tr>
+<tr>
+<td><code>patternSquareSideLength</code></td>
+<td>Size of one checkerboard square (cm).</td>
+</tr>
+<tr>
+<td><code>skipFrames</code></td>
+<td>Process every Nth frame for efficiency.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="steps">🏃 Steps</h3>
+<ol>
+<li>Record a video of a checkerboard pattern covering the camera’s field of view.</li>
+<li>Update <code>calibration_descriptor.json</code> with your video and parameters.</li>
+<li>Run the calibration script.</li>
+<li>The script produces an updated <code>calibration.xml</code>.</li>
+</ol>
+<h3 id="update-aegear">📦 Update Aegear</h3>
+<p>Copy the resulting <code>calibration.xml</code> to:</p>
+<pre><code>config/calibration.xml
+</code></pre>
+<p>This ensures Aegear uses the corrected intrinsic parameters.</p>
+<hr />
+<h2 id="summary-scene-vs-lens-calibration">🔑 Summary: Scene vs Lens Calibration</h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Scene Calibration</th>
+<th>Lens Calibration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Corrects Lens Distortion</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Converts Pixels to Metric</td>
+<td>✅</td>
+<td>✅ (indirectly)</td>
+</tr>
+<tr>
+<td>Location in Aegear</td>
+<td>GUI (<em>Calibrate</em>)</td>
+<td>CLI (<code>tools/calibration.py</code>)</td>
+</tr>
+<tr>
+<td>Output</td>
+<td>Homography</td>
+<td>Intrinsic matrix &amp; distortion coefficients</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="notes">📝 Notes</h2>
+<ul>
+<li>Lens calibration should be performed <strong>once per camera setup</strong> and reused.</li>
+<li>Scene calibration is required <strong>per video</strong> if camera/view changes.</li>
+<li>Future versions of Aegear may integrate lens calibration and custom scene reference point systems into the GUI.</li>
+</ul>
 
 
 
@@ -643,10 +750,10 @@ European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549</p>
     
     
       
-      <script id="__config" type="application/json">{"base": ".", "features": [], "search": "assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.56ea9cef.min.js"></script>
+      <script src="../assets/javascripts/bundle.56ea9cef.min.js"></script>
       
     
   </body>
