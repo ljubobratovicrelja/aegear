@@ -94,16 +94,6 @@ To train Aegear on your own data:
 
 ---
 
-## 📖 Notes
-
-- Training requires PyTorch with GPU support for reasonable performance.
-- Pretrained EfficientNet-B0 weights are loaded automatically.
-- CBAM modules enhance spatial and channel attention, improving performance in cluttered environments.
-- Data augmentations are applied at runtime to improve generalization.
-- The Siamese tracker is highly sensitive to template drift; careful dataset preparation is recommended.
-
----
-
 ## 📜 References
 
 See the original papers for the underlying architectures:  
