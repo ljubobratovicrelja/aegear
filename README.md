@@ -104,19 +104,15 @@ If your use case involves different species, environments, or tracking requireme
 
 > 📌 **Feature Requests:** Open a GitHub issue if you require specific capabilities not yet available. We will prioritize these to make Aegear a useful resource for the wider community.
 
----
-
 ## 📖 Documentation
 
 For detailed guides, tutorials, and API references, visit the full [project documentation](https://ljubobratovicrelja.github.io/aegear/).
 
---
 
 ## 🧠 Acknowledgments
 
 Special thanks to Gina and Uroš from the HAKI research team, whose collaboration and encouragement sparked the development of this toolkit.
 
---
 
 ## 📖 References
 
