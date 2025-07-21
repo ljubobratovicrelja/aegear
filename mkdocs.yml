@@ -5,6 +5,9 @@ theme:
   name: material
   logo: media/logo_small.png
   favicon: media/logo_favicon.png
+  features:
+    - content.code.copy
+    - content.code.annotate
 nav:
   - Home: index.md
   - Installation: installation.md
@@ -12,7 +15,12 @@ nav:
   - Calibration: calibration.md
   - Training: training.md
   - Docker: docker.md
+  - Tutorial (API): tutorial_api.md
   - API: api.md
 plugins:
   - search
   - mkdocstrings
+markdown_extensions:
+  - codehilite
+  - pymdownx.highlight
+  - pymdownx.superfences

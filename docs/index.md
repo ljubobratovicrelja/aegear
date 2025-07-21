@@ -9,6 +9,34 @@
 
 ---
 
+# 🏠 Aegear Documentation
+
+Welcome to the Aegear project documentation. Use the links below to navigate:
+
+## 📚 Table of Contents
+
+- [📦 Installation](installation.md)  
+  Step-by-step guide for setting up Aegear.
+
+- [🚀 Usage](usage.md)  
+  Learn how to run Aegear for fish tracking and analysis.
+
+- [🎯 Calibration](calibration.md)  
+  Detailed instructions on calibrating your camera and tank setup.
+
+- [🧠 Training](training.md)  
+  How to train new models for detection and tracking.
+
+- [🐳 Docker](docker.md)  
+  Using Aegear with Docker for could environments setup for training models.
+
+- [📖 Tutorial (API)](tutorial_api.md)  
+  Walkthrough of Tracking API usage with sample code and explanations.
+
+- [📝 API Reference](api.md)  
+  Full reference of all Aegear modules, classes, and functions. (WIP)
+
+---
 
 ## 🧠 Project Overview
 
