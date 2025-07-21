@@ -14,7 +14,7 @@
         <link rel="prev" href="../training/">
       
       
-        <link rel="next" href="../api/">
+        <link rel="next" href="../tutorial_api/">
       
       
       <link rel="icon" href="../media/logo_favicon.png">
@@ -439,6 +439,28 @@
   
   
     <li class="md-nav__item">
+      <a href="../tutorial_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tutorial (API)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -549,19 +571,19 @@
 <hr />
 <h2 id="public-docker-image">📦 Public Docker Image</h2>
 <p>The official Aegear Docker image is hosted on Docker Hub:  </p>
-<pre><code>ljubobratovicrelja/aegear:latest
-</code></pre>
+<div class="highlight"><pre><span></span><code>ljubobratovicrelja/aegear:latest
+</code></pre></div>
 <p>Pull the image with:  </p>
-<pre><code class="language-bash">docker pull ljubobratovicrelja/aegear:latest
-</code></pre>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>pull<span class="w"> </span>ljubobratovicrelja/aegear:latest
+</code></pre></div>
 <hr />
 <h2 id="running-the-image">🚀 Running the Image</h2>
 <p>Launch a container with GPU support (if available):  </p>
-<pre><code class="language-bash">docker run --gpus all -it ljubobratovicrelja/aegear:latest
-</code></pre>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>-it<span class="w"> </span>ljubobratovicrelja/aegear:latest
+</code></pre></div>
 <p>To mount a local directory for accessing datasets or saving models:  </p>
-<pre><code class="language-bash">docker run --gpus all -it -v /path/to/data:/workspace/data ljubobratovicrelja/aegear:latest
-</code></pre>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>-it<span class="w"> </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span>ljubobratovicrelja/aegear:latest
+</code></pre></div>
 <p>This will mount <code>/path/to/data</code> on your host to <code>/workspace/data</code> inside the container.</p>
 <hr />
 <h2 id="custom-training-with-docker">🛠 Custom Training with Docker</h2>
@@ -570,10 +592,10 @@
 <li>
 <p><strong>Clone and Extend</strong><br />
    Clone the Aegear repository and modify the Dockerfile as needed:<br />
-<code>bash
-   git clone https://github.com/ljubobratovicrelja/aegear.git
-   cd aegear
-   docker build -t aegear-custom .</code></p>
+   <div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/ljubobratovicrelja/aegear.git
+<span class="nb">cd</span><span class="w"> </span>aegear
+docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>aegear-custom<span class="w"> </span>.
+</code></pre></div></p>
 </li>
 <li>
 <p><strong>Custom Parameters</strong><br />
@@ -583,8 +605,8 @@
 <li><strong>Which branch</strong> of the repository (defaults to <code>main</code>)  </li>
 </ol>
 <p>Example:<br />
-<code>bash
-   docker run --gpus all -e NOTEBOOK=training_siamese.ipynb -e BRANCH=dev -it ljubobratovicrelja/aegear:latest</code></p>
+   <div class="highlight"><pre><span></span><code>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>-e<span class="w"> </span><span class="nv">NOTEBOOK</span><span class="o">=</span>training_siamese.ipynb<span class="w"> </span>-e<span class="w"> </span><span class="nv">BRANCH</span><span class="o">=</span>dev<span class="w"> </span>-it<span class="w"> </span>ljubobratovicrelja/aegear:latest
+</code></pre></div></p>
 <blockquote>
 <p>📌 Currently, this works for the main repository. Support for forks can be added easily by adjusting the Dockerfile’s repository source.</p>
 </blockquote>
@@ -596,9 +618,9 @@
 <li>
 <p><strong>Run Training Scripts</strong><br />
    Inside the container, launch Jupyter notebooks or Python scripts from the <code>notebooks/</code> directory:<br />
-<code>bash
-   jupyter notebook notebooks/training_unet.ipynb
-   jupyter notebook notebooks/training_siamese.ipynb</code></p>
+   <div class="highlight"><pre><span></span><code>jupyter<span class="w"> </span>notebook<span class="w"> </span>notebooks/training_unet.ipynb
+jupyter<span class="w"> </span>notebook<span class="w"> </span>notebooks/training_siamese.ipynb
+</code></pre></div></p>
 </li>
 </ol>
 <hr />
@@ -610,9 +632,9 @@
 </ul>
 <hr />
 <h2 id="source-dockerfile">📦 Source Dockerfile</h2>
-<p>The Dockerfile used to build the public image is included in the repository at:  </p>
-<pre><code>aegear/Dockerfile
-</code></pre>
+<p>The Dockerfile used to build the public image is included in the repository at:<br />
+<div class="highlight"><pre><span></span><code>aegear/Dockerfile
+</code></pre></div></p>
 <p>This can serve as a starting point for creating your own custom images.</p>
 
 
@@ -662,7 +684,7 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": ["content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.56ea9cef.min.js"></script>

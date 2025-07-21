@@ -463,6 +463,28 @@
   
   
     <li class="md-nav__item">
+      <a href="../tutorial_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tutorial (API)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -625,20 +647,20 @@
 <ul>
 <li><strong>Where?</strong>: Not yet available in the GUI.</li>
 <li><strong>Tool</strong>: Use the provided script:
-  <code>bash
-  python tools/calibration.py calibration_descriptor.json</code></li>
+  <div class="highlight"><pre><span></span><code>python<span class="w"> </span>tools/calibration.py<span class="w"> </span>calibration_descriptor.json
+</code></pre></div></li>
 </ul>
 <h3 id="calibration-descriptor-calibration_descriptorjson">📑 Calibration Descriptor (<code>calibration_descriptor.json</code>)</h3>
-<p>Example:</p>
-<pre><code class="language-json">{
-    &quot;videoPath&quot;: &quot;data/videos/2016_0718_200947_002.MOV&quot;,
-    &quot;calibrationDataPath&quot;: &quot;data/calibration.xml&quot;,
-    &quot;patternSize&quot;: [8, 6],
-    &quot;subPixWinSize&quot;: [5, 5],
-    &quot;patternSquareSideLength&quot;: 1.6,
-    &quot;skipFrames&quot;: 120
-}
-</code></pre>
+<p>Example:
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;videoPath&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;data/videos/2016_0718_200947_002.MOV&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;calibrationDataPath&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;data/calibration.xml&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;patternSize&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">8</span><span class="p">,</span><span class="w"> </span><span class="mi">6</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;subPixWinSize&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;patternSquareSideLength&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1.6</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;skipFrames&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">120</span>
+<span class="p">}</span>
+</code></pre></div></p>
 <p><strong>Fields:</strong></p>
 <table>
 <thead>
@@ -682,10 +704,10 @@
 <li>The script produces an updated <code>calibration.xml</code>.</li>
 </ol>
 <h3 id="update-aegear">📦 Update Aegear</h3>
-<p>Copy the resulting <code>calibration.xml</code> to:</p>
-<pre><code>config/calibration.xml
-</code></pre>
-<p>This ensures Aegear uses the corrected intrinsic parameters.</p>
+<p>Copy the resulting <code>calibration.xml</code> to:
+<div class="highlight"><pre><span></span><code>config/calibration.xml
+</code></pre></div>
+This ensures Aegear uses the corrected intrinsic parameters.</p>
 <hr />
 <h2 id="summary-scene-vs-lens-calibration">🔑 Summary: Scene vs Lens Calibration</h2>
 <table>
@@ -774,7 +796,7 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": ["content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.56ea9cef.min.js"></script>
