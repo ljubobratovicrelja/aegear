@@ -38,16 +38,13 @@ Welcome to the Aegear project documentation. Use the links below to navigate:
 
 ---
 
-## 🧠 Project Overview
+# 🧠 Project Overview
 
 **Aegear** is a computer vision toolkit developed for the analysis of fish locomotion in controlled aquaculture environments. Originally designed for behavioral studies on juvenile Russian sturgeon (*Acipenser gueldenstaedtii*), the system enables robust detection and tracking of individual fish across a range of experimental conditions, including tanks with textured floors and heterogeneous lighting.
 
-The toolkit addresses the need for accurate, reproducible behavioral metrics in video-based aquaculture experiments. It provides a complete pipeline for fish localization, trajectory tracking, scene calibration, and data augmentation — with a focus on modularity, reusability, and extensibility to other species and experimental setups.
-
-The name **Aegear** references **Ægir**, the Norse god of the sea, symbolizing the system's focus on aquatic environments, while also invoking *eye-gear* — a metaphor for visual instrumentation and observation.
+The name **Aegear** draws inspiration from **Ægir**, the Norse god of the sea, symbolizing its aquatic focus and its role as *eye-gear* — a visual tool for observation and discovery.
 
 ---
-
 
 <p align="center">
   <img src="media/1.png" alt="Dense Tank" width="45%" style="margin-right:2%;"/>
@@ -56,13 +53,17 @@ The name **Aegear** references **Ægir**, the Norse god of the sea, symbolizing 
 
 ---
 
-## 🔬 Project Overview
+## 🔬 Technical Summary
 
-Aegear is a computer vision toolkit for detecting and tracking fish in aquaculture environments. Initially applied in the doctoral research of Georgina Fazekas (2020– ), which investigated how environmental and feeding strategies affect the swimming activity of juvenile sturgeons (Acipenser gueldenstaedtii, A. ruthenus), Aegear was developed to address the limitations of existing animal tracking tools in real-world aquaculture conditions. Unlike systems such as idtracker.ai (Romero-Ferrero et al., 2018), which require clean backgrounds and controlled lighting, Aegear is designed for noisy environments with textured floors, variable illumination, and water reflections.
+Aegear is a computer vision system for detecting and tracking fish in aquaculture tanks. It was initially applied in the doctoral research of Georgina Fazekas (2020– ), which explored environmental and feeding effects on juvenile sturgeon swimming behavior (*A. gueldenstaedtii*, *A. ruthenus*). The toolkit was created to overcome limitations in existing tracking systems, such as idtracker.ai (Romero-Ferrero et al., 2018), which require clean backgrounds and uniform lighting.
 
-At its core, Aegear integrates a U-Net-style detection network with an EfficientNet-B0 encoder backbone, specialized through transfer learning on custom tank recordings. For tracking, the same backbone extends into a Siamese network architecture that associates detections across frames, enabling appearance-based localization without manual re-identification. This combination ensures robust trajectory reconstruction even in complex scenes.
+At its core, Aegear integrates:
 
-The toolkit also includes camera calibration routines for intrinsic parameter estimation and extrinsic metric scaling from four predefined scene reference points, allowing trajectories to be expressed in real-world metric units (e.g., centimeters).
+- **Detection**: A U-Net-style segmentation network with an EfficientNet-B0 encoder backbone, trained via transfer learning on aquaculture-specific datasets.
+- **Tracking**: A Siamese network architecture for appearance-based localization across frames, enabling robust trajectory reconstruction without manual re-identification.
+- **Calibration**: Camera routines for intrinsic parameter estimation and extrinsic scaling from four reference points, allowing trajectory data to be expressed in metric units.
+
+This modular pipeline supports robust fish localization, trajectory analysis, and data augmentation across varied experimental conditions, ensuring reproducibility and adaptability to other species and setups.
 
 ---
 
