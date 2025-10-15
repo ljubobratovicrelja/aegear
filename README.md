@@ -131,3 +131,5 @@ Special thanks to Gina and Uroš from the HAKI research team, whose collaboratio
 > Bertinetto, L., Valmadre, J., Henriques, J. F., Vedaldi, A., & Torr, P. H. S. (2016).
 > Fully-Convolutional Siamese Networks for Object Tracking.
 > European Conference on Computer Vision (ECCV) Workshops. arXiv:1606.09549
+
+<meta name="google-site-verification" content="t6ydj_h8Zt_ds5tsiJ3IOzhSoX--LrWfhzEkjnrFnMg" />
