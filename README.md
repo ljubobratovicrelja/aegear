@@ -111,7 +111,7 @@ For detailed guides, tutorials, and API references, visit the full [project docu
 
 ## 🧠 Acknowledgments
 
-Special thanks to Gina and Uroš from the HAKI research team, whose collaboration and encouragement sparked the development of this toolkit.
+Special thanks to Gina and Uroš, whose collaboration and encouragement sparked the development of this toolkit.
 
 
 ## 📖 References
