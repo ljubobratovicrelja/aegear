@@ -49,7 +49,17 @@ The name **Aegear** draws inspiration from **Ægir**, the Norse god of the sea, 
 <p align="center">
   <img src="media/1.png" alt="Dense Tank" width="45%" style="margin-right:2%;"/>
   <img src="media/2.png" alt="Open Arena" width="45%"/>
+  <br>
+  <a href="https://drive.google.com/file/d/1wiCYj84Ny0pt19dcB9BeO9JEYiZCFPfI/view?usp=sharing">
+    <img src="media/2_per_12.gif" alt="vid1" width="92%"/>
+  </a>
+  <br>
+  <a href="https://drive.google.com/file/d/1dcwDXiy9txEMiyDMI1G8Y60RMlW_Fxgs/view?usp=sharing">
+    <img src="media/5_per_12.gif" alt="vid2" width="92%"/>
+  </a>
 </p>
+
+(click on the animated GIF to see the full video)
 
 ---
 
