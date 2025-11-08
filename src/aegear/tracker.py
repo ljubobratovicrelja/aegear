@@ -50,6 +50,8 @@ class FishTracker:
     WINDOW_SIZE = 128
     # The size of the tracking window.
     TRACKER_WINDOW_SIZE = 128
+    # Threshold for movement mask to consider valid movement.
+    MOVEMENT_MASK_THRESHOLD = 0.1
 
     def __init__(self,
                  heatmap_model_path,
@@ -213,8 +215,18 @@ class FishTracker:
 
             if result is not None:
                 prediction = result.global_coordinates((x1, y1))
+
                 prediction.roi = self._tracking_roi(
                     frame, prediction.centroid)[1]
+
+                # Figure out mask values at the tracked point.
+                if mask is not None:
+                    w = FishTracker.TRACKER_WINDOW_SIZE // 2
+                    mask_values = mask[prediction.centroid[1] - w: prediction.centroid[1] + w, prediction.centroid[0] - w: prediction.centroid[0] + w].mean()
+                    if mask_values < FishTracker.MOVEMENT_MASK_THRESHOLD:
+                        self._debug_print("Tracking: Mask check failed")
+                        return None
+                
 
                 self._debug_print(
                     f"Found fish at ({result.centroid}) with confidence {result.confidence}")

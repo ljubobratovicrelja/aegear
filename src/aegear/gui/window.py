@@ -28,10 +28,10 @@ from aegear.video import VideoClip
 
 # Constants
 DEFAULT_CALIBRATION_FILE = resource_path("config/calibration.xml")
-LOGO_FILE = resource_path("media/logo.png")
+LOGO_FILE = resource_path("docs/media/logo.png")
 HEATMAP_MODEL_PATH = resource_path(
     "models/model_efficient_unet_2025-05-26.pth")
-SIAMESE_MODEL_PATH = resource_path("models/model_siamese_2025-05-26.pth")
+SIAMESE_MODEL_PATH = resource_path("models/model_siamese_2025-11-08.pth")
 
 
 class AegearMainWindow(tk.Tk):
@@ -53,7 +53,7 @@ class AegearMainWindow(tk.Tk):
         self.title("Aegear")
 
         # Set custom window icon
-        icon_path = resource_path("media/icon.ico")
+        icon_path = resource_path("docs/media/icon.ico")
         self.iconbitmap(icon_path)
 
         # Initialize internal state.
@@ -1017,8 +1017,7 @@ class AegearMainWindow(tk.Tk):
             self._current_frame = np.zeros((720, 1280, 3), dtype=np.uint8)
 
             # Load logo PNG
-            logo_img = cv2.imread(resource_path(
-                "media/logo.png"), cv2.IMREAD_UNCHANGED)
+            logo_img = cv2.imread(LOGO_FILE, cv2.IMREAD_UNCHANGED)
             if logo_img is not None:
                 logo_img = cv2.resize(logo_img, None, fx=0.5, fy=0.5)
                 logo_img = cv2.cvtColor(logo_img, cv2.COLOR_BGRA2RGBA)
