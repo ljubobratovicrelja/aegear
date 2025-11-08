@@ -3091,11 +3091,7 @@ By convention, the points are in the order: top left, top right, bottom right, b
 <span class="normal">896</span>
 <span class="normal">897</span>
 <span class="normal">898</span>
-<span class="normal">899</span>
-<span class="normal">900</span>
-<span class="normal">901</span>
-<span class="normal">902</span>
-<span class="normal">903</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TrackingDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+<span class="normal">899</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TrackingDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
 
     <span class="n">_MAX_NEGATIVE_OFFSET</span> <span class="o">=</span> <span class="mi">50</span>  <span class="c1"># Maximum offset for negative samples</span>
 
@@ -3447,15 +3443,11 @@ By convention, the points are in the order: top left, top right, bottom right, b
         <span class="n">template</span> <span class="o">=</span> <span class="n">to_tensor</span><span class="p">(</span><span class="n">template</span><span class="p">)</span>
         <span class="n">search</span> <span class="o">=</span> <span class="n">to_tensor</span><span class="p">(</span><span class="n">search</span><span class="p">)</span>
 
-        <span class="c1"># Augmentation with same seed</span>
+        <span class="c1"># Transform/augment both images with same function.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">augmentation_transform</span><span class="p">:</span>
-            <span class="n">seed</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10000</span><span class="p">)</span>
-            <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
-            <span class="n">template</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">augmentation_transform</span><span class="p">(</span>
-                <span class="n">template</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-            <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
-            <span class="n">search</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">augmentation_transform</span><span class="p">(</span>
-                <span class="n">search</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">stacked</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">template</span><span class="p">,</span> <span class="n">search</span><span class="p">])</span>
+            <span class="n">transformed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">augmentation_transform</span><span class="p">(</span><span class="n">stacked</span><span class="p">)</span>
+            <span class="n">template</span><span class="p">,</span> <span class="n">search</span> <span class="o">=</span> <span class="n">transformed</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">transformed</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
 
         <span class="c1"># Normalize the images</span>
         <span class="n">template</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">normalize</span><span class="p">(</span><span class="n">template</span><span class="p">)</span>
@@ -3679,7 +3671,11 @@ Each sample contains (template, search, heatmap).</p>
 
               <details class="quote">
                 <summary>Source code in <code>src\aegear\datasets.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">906</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">902</span>
+<span class="normal">903</span>
+<span class="normal">904</span>
+<span class="normal">905</span>
+<span class="normal">906</span>
 <span class="normal">907</span>
 <span class="normal">908</span>
 <span class="normal">909</span>
@@ -3724,11 +3720,7 @@ Each sample contains (template, search, heatmap).</p>
 <span class="normal">948</span>
 <span class="normal">949</span>
 <span class="normal">950</span>
-<span class="normal">951</span>
-<span class="normal">952</span>
-<span class="normal">953</span>
-<span class="normal">954</span>
-<span class="normal">955</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">CachedTrackingDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
+<span class="normal">951</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">CachedTrackingDataset</span><span class="p">(</span><span class="n">Dataset</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Cached version of TrackingDataset.</span>
 <span class="sd">    Loads crops and metadata from disk, avoiding video decoding at runtime.</span>
@@ -3832,7 +3824,11 @@ The output is (image, heatmap), where heatmap is always a zero tensor.</p>
 
               <details class="quote">
                 <summary>Source code in <code>src\aegear\datasets.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 958</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 954</span>
+<span class="normal"> 955</span>
+<span class="normal"> 956</span>
+<span class="normal"> 957</span>
+<span class="normal"> 958</span>
 <span class="normal"> 959</span>
 <span class="normal"> 960</span>
 <span class="normal"> 961</span>
@@ -3927,11 +3923,7 @@ The output is (image, heatmap), where heatmap is always a zero tensor.</p>
 <span class="normal">1050</span>
 <span class="normal">1051</span>
 <span class="normal">1052</span>
-<span class="normal">1053</span>
-<span class="normal">1054</span>
-<span class="normal">1055</span>
-<span class="normal">1056</span>
-<span class="normal">1057</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">BackgroundWindowDataset</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Dataset</span><span class="p">):</span>
+<span class="normal">1053</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">BackgroundWindowDataset</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">Dataset</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Dataset for sampling background (no-fish) windows from a video, using a sliding window approach.</span>
 <span class="sd">    The user provides a list of frame indices known to contain only background (no fish present).</span>
@@ -6122,12 +6114,26 @@ next_frame : numpy.ndarray
 <span class="normal">421</span>
 <span class="normal">422</span>
 <span class="normal">423</span>
-<span class="normal">424</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FishTracker</span><span class="p">:</span>
+<span class="normal">424</span>
+<span class="normal">425</span>
+<span class="normal">426</span>
+<span class="normal">427</span>
+<span class="normal">428</span>
+<span class="normal">429</span>
+<span class="normal">430</span>
+<span class="normal">431</span>
+<span class="normal">432</span>
+<span class="normal">433</span>
+<span class="normal">434</span>
+<span class="normal">435</span>
+<span class="normal">436</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">FishTracker</span><span class="p">:</span>
 
     <span class="c1"># Original window size for the training data.</span>
     <span class="n">WINDOW_SIZE</span> <span class="o">=</span> <span class="mi">128</span>
     <span class="c1"># The size of the tracking window.</span>
     <span class="n">TRACKER_WINDOW_SIZE</span> <span class="o">=</span> <span class="mi">128</span>
+    <span class="c1"># Threshold for movement mask to consider valid movement.</span>
+    <span class="n">MOVEMENT_MASK_THRESHOLD</span> <span class="o">=</span> <span class="mf">0.1</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
                  <span class="n">heatmap_model_path</span><span class="p">,</span>
@@ -6291,8 +6297,18 @@ next_frame : numpy.ndarray
 
             <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="n">prediction</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">global_coordinates</span><span class="p">((</span><span class="n">x1</span><span class="p">,</span> <span class="n">y1</span><span class="p">))</span>
+
                 <span class="n">prediction</span><span class="o">.</span><span class="n">roi</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tracking_roi</span><span class="p">(</span>
                     <span class="n">frame</span><span class="p">,</span> <span class="n">prediction</span><span class="o">.</span><span class="n">centroid</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+
+                <span class="c1"># Figure out mask values at the tracked point.</span>
+                <span class="k">if</span> <span class="n">mask</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">w</span> <span class="o">=</span> <span class="n">FishTracker</span><span class="o">.</span><span class="n">TRACKER_WINDOW_SIZE</span> <span class="o">//</span> <span class="mi">2</span>
+                    <span class="n">mask_values</span> <span class="o">=</span> <span class="n">mask</span><span class="p">[</span><span class="n">prediction</span><span class="o">.</span><span class="n">centroid</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">w</span><span class="p">:</span> <span class="n">prediction</span><span class="o">.</span><span class="n">centroid</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">w</span><span class="p">,</span> <span class="n">prediction</span><span class="o">.</span><span class="n">centroid</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">w</span><span class="p">:</span> <span class="n">prediction</span><span class="o">.</span><span class="n">centroid</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">w</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">mask_values</span> <span class="o">&lt;</span> <span class="n">FishTracker</span><span class="o">.</span><span class="n">MOVEMENT_MASK_THRESHOLD</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_debug_print</span><span class="p">(</span><span class="s2">&quot;Tracking: Mask check failed&quot;</span><span class="p">)</span>
+                        <span class="k">return</span> <span class="kc">None</span>
+
 
                 <span class="bp">self</span><span class="o">.</span><span class="n">_debug_print</span><span class="p">(</span>
                     <span class="sa">f</span><span class="s2">&quot;Found fish at (</span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">centroid</span><span class="si">}</span><span class="s2">) with confidence </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">confidence</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -6532,9 +6548,7 @@ next_frame : numpy.ndarray
 
             <details class="quote">
               <summary>Source code in <code>src\aegear\tracker.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 77</span>
-<span class="normal"> 78</span>
-<span class="normal"> 79</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 79</span>
 <span class="normal"> 80</span>
 <span class="normal"> 81</span>
 <span class="normal"> 82</span>
@@ -6586,7 +6600,9 @@ next_frame : numpy.ndarray
 <span class="normal">128</span>
 <span class="normal">129</span>
 <span class="normal">130</span>
-<span class="normal">131</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_tracking</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_tracking</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
                  <span class="n">video</span><span class="p">:</span> <span class="n">VideoClip</span><span class="p">,</span>
                  <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
                  <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
