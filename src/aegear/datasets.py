@@ -873,15 +873,11 @@ class TrackingDataset(Dataset):
         template = to_tensor(template)
         search = to_tensor(search)
 
-        # Augmentation with same seed
+        # Transform/augment both images with same function.
         if self.augmentation_transform:
-            seed = np.random.randint(0, 10000)
-            torch.manual_seed(seed)
-            template = self.augmentation_transform(
-                template.unsqueeze(0)).squeeze(0)
-            torch.manual_seed(seed)
-            search = self.augmentation_transform(
-                search.unsqueeze(0)).squeeze(0)
+            stacked = torch.stack([template, search])
+            transformed = self.augmentation_transform(stacked)
+            template, search = transformed[0], transformed[1]
 
         # Normalize the images
         template = self.normalize(template)
