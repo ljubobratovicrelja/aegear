@@ -45,10 +45,18 @@ python -m venv .venv
 source .venv/bin/activate  # Linux/macOS
 .venv\Scripts\activate     # Windows
 
-pip install -e .[dev]
+pip install -e .[cpu]
 ```
 
-This installs Aegear in editable mode along with developer tools (notebooks, training).
+This installs Aegear in editable mode along with developer tools (notebooks, training). For CUDA Torch version, there is a `cuda124` optional setup:
+```bash
+pip install -e .[cuda124]
+```
+
+If you are planning on doing your own development and model training, be sure to also include the `dev` option:
+```bash
+pip install -e .[cuda124,dev]
+```
 
 ---
 
@@ -62,11 +70,11 @@ aegear-gui
 
 ## 📌 Requirements
 
-| Component        | Minimum Version |
+| Component        | Version |
 |------------------|-----------------|
-| Python           | 3.10+           |
-| PyTorch          | 2.6+            |
-| CUDA (optional)  | 12.1+           |
+| Python           | >=3.11           |
+| PyTorch          | >2.6           |
+| CUDA (optional)  | 12.4  (with `cuda124` project installation)          |
 
 ---
 

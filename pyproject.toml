@@ -15,11 +15,11 @@ dependencies = [
     "opencv-python>=4.11.0.86",
     "Pillow>=9.2.0,<11.0.0",
     "scipy>=1.11.0",
-    "torch>=2.6,<2.7",
-    "torchvision>=0.21,<0.22",
 ]
 
 [project.optional-dependencies]
+cpu = ["torch>=2.6,<2.7", "torchvision>=0.21,<0.22"]
+cuda124 = ["torch>=2.6,<2.7", "torchvision>=0.21,<0.22"]
 dev = [
     "kornia>=0.8.0",
     "tqdm>=4.65.0",
@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ljubobratovicrelja/aegear"
+Homepage = "https://ljubobratovicrelja.github.io/aegear/"
 Repository = "https://github.com/ljubobratovicrelja/aegear"
 
 [build-system]

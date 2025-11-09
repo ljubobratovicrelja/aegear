@@ -3,7 +3,7 @@
 
 **Tracking and analyzing fish behavior in controlled aquaculture environments**
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)[![Documentation](https://img.shields.io/badge/documentation-online-brightgreen.svg?style=flat&logo=readthedocs)](https://ljubobratovicrelja.github.io/aegear/)[![Docker](https://img.shields.io/badge/docker-aegear-blue?logo=docker&logoColor=white)](https://hub.docker.com/r/ljubobratovicrelja/aegear)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)[![Documentation](https://img.shields.io/badge/documentation-online-brightgreen.svg?style=flat&logo=readthedocs)](https://ljubobratovicrelja.github.io/aegear/)[![Docker](https://img.shields.io/badge/docker-aegear-blue?logo=docker&logoColor=white)](https://hub.docker.com/r/ljubobratovicrelja/aegear)
 
 
 
@@ -69,7 +69,12 @@ To install Aegear in editable mode with additional dependencies for training, no
 ```bash
 git clone https://github.com/ljubobratovicrelja/aegear.git
 cd aegear
-pip install -e .[dev]
+pip install -e .[cpu,dev]
+```
+
+For CUDA Torch version, there is a `cuda124` optional setup:
+```bash
+pip install -e .[cuda124,dev]
 ```
 
 **Note**: Best do this in an virtual environment because of heavy dependencies that Aegear carries along with its install.

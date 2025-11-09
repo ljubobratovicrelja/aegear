@@ -4,6 +4,10 @@ import sys
 import os
 import re
 
+import torch
+import zipfile
+from google.cloud import storage
+
 from datetime import datetime
 
 import numpy as np
@@ -41,6 +45,71 @@ def get_latest_model_path(directory, model_name) -> str:
                 continue
 
     return os.path.join(directory, latest_file) if latest_file else None
+
+
+def load_model_with_weights(model_class, model_path, device):
+    """Load a model with weights from a checkpoint.
+    
+    Parameters
+    ----------
+    model_class : torch.nn.Module
+        Model class to instantiate
+    model_path : str
+        Path to model checkpoint
+    device : str
+        Device to load model on ('cuda' or 'cpu')
+        
+    Returns
+    -------
+    torch.nn.Module
+        Loaded model
+    """
+    model = model_class()
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.to(device)
+    model.eval()
+    return model
+
+
+def download_dataset(dataset_dir, dataset_type="tracking"):
+    """Download dataset from GCS if not already present.
+    
+    Parameters
+    ----------
+    dataset_dir : str
+        Directory to download the dataset to
+    dataset_type : str
+        Type of dataset to download ('tracking' or 'detection')
+    """
+    bucket_name = "aegear-training-data"
+    blob_path = f"cache/{dataset_type}.zip"
+    
+    dataset_path = os.path.join(dataset_dir, dataset_type)
+    
+    if os.path.exists(dataset_path):
+        print(f"{dataset_type.capitalize()} dataset already exists. Skipping download.")
+        return
+    
+    print(f"{dataset_type.capitalize()} dataset not found. Downloading...")
+    zip_path = os.path.join(dataset_dir, f"{dataset_type}.zip")
+    os.makedirs(dataset_dir, exist_ok=True)
+    
+    # Download the zip file if it doesn't exist
+    if not os.path.exists(zip_path):
+        print(f"Downloading gs://{bucket_name}/{blob_path} to {zip_path}...")
+        
+        # Initialize anonymous GCS client for public data
+        client = storage.Client.create_anonymous_client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        blob.download_to_filename(zip_path)
+        
+        print("Download complete.")
+    
+    # Unzip the file
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(dataset_dir)
+        print(f"Extracted to {dataset_dir}")
 
 
 class Kalman2D:
