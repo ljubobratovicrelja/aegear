@@ -479,19 +479,33 @@
 <p><strong>Aegear</strong> is a computer vision toolkit developed for the analysis of fish locomotion in controlled aquaculture environments. Originally designed for behavioral studies on juvenile Russian sturgeon (<em>Acipenser gueldenstaedtii</em>), the system enables robust detection and tracking of individual fish across a range of experimental conditions, including tanks with textured floors and heterogeneous lighting.</p>
 <p>The name <strong>Aegear</strong> draws inspiration from <strong>Ægir</strong>, the Norse god of the sea, symbolizing its aquatic focus and its role as <em>eye-gear</em> — a visual tool for observation and discovery.</p>
 <hr />
+<h2 id="examples">📷 Examples</h2>
+<p>Example tracking results demonstrating robust performance across challenging conditions including textured substrates, variable lighting, and complex backgrounds. The complete pipeline (U-Net segmentation, Siamese tracking, Kalman filtering) is shown in action.</p>
+<p><em>All examples shown are from held-out test data not used during training. Click on any image to watch the full video</em></p>
 <p align="center">
   <a href="https://www.youtube.com/watch?v=YrYQkCFcHMI">
-    <img src="media/2_per_12.gif" alt="vid1" width="75%"/>
+    <img src="media/2_per_12.gif" alt="vid1" width="90%"/>
   </a>
-  <a href="https://www.youtube.com/watch?v=NdESuEQJ7Lo">
-    <img src="media/4_per_23.gif" alt="vid2" width="75%"/>
-  </a>
-  <a href="https://www.youtube.com/watch?v=B7pUtCJIPxc">
-    <img src="media/5_per_12.gif" alt="vid2" width="75%"/>
-  </a>
+  <br>
+  <em>Occlusion handling: Automatic trajectory recovery when fish passes behind tank structures</em>
 </p>
 
-<p>(click on the animated GIF to see the full video)</p>
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=u1tdceBCiqk">
+    <img src="media/4_per_8.gif" alt="vid2" width="90%"/>
+  </a>
+  <br>
+  <em>Dense substrate tracking: Robust performance across complex textured floors with heterogeneous patterns</em>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/pARO409KMNM">
+    <img src="media/6_per_22.gif" alt="vid3" width="90%"/>
+  </a>
+  <br>
+  <em>Low-light conditions: Reliable detection and quick recovery in challenging illumination</em>
+</p>
+
 <hr />
 <h2 id="technical-summary">🔬 Technical Summary</h2>
 <p>Aegear is a computer vision system for detecting and tracking fish in aquaculture tanks. It was initially applied in the doctoral research of Georgina Fazekas (2020– ), which explored environmental and feeding effects on juvenile sturgeon swimming behavior (<em>A. gueldenstaedtii</em>, <em>A. ruthenus</em>). The toolkit was created to overcome limitations in existing tracking systems, such as idtracker.ai (Romero-Ferrero et al., 2018), which require clean backgrounds and uniform lighting.</p>
