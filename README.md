@@ -24,13 +24,13 @@ The name **Aegear** draws inspiration from **Ægir**, the Norse god of the sea, 
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=YrYQkCFcHMI">
-    <img src="docs/media/2_per_12.gif" alt="vid1" width="75%"/>
+    <img src="docs/media/2_per_12.gif" alt="vid1" width="95%"/>
   </a>
   <a href="https://www.youtube.com/watch?v=NdESuEQJ7Lo">
-    <img src="docs/media/4_per_23.gif" alt="vid2" width="75%"/>
+    <img src="docs/media/4_per_23.gif" alt="vid2" width="95%"/>
   </a>
   <a href="https://www.youtube.com/watch?v=B7pUtCJIPxc">
-    <img src="docs/media/5_per_12.gif" alt="vid2" width="75%"/>
+    <img src="docs/media/5_per_12.gif" alt="vid2" width="95%"/>
   </a>
 </p>
 
