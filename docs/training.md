@@ -94,6 +94,111 @@ To train Aegear on your own data:
 
 ---
 
+## 🔍 Model Evaluation and Dataset Inspection
+
+After training, you can evaluate your models and inspect predictions using the dataset inspection tool. The project includes a CLI utility provides visual analysis through FiftyOne, allowing you to review model predictions, identify failure cases, and measure performance metrics.
+
+### Prerequisites
+
+The inspection tool requires FiftyOne, which is included in the `dev` optional dependencies. If you haven't already installed Aegear with development tools:
+
+```bash
+pip install -e .[dev]
+```
+
+### Basic Usage
+
+Evaluate a tracking model on the validation set:
+
+```bash
+python tools/dataset_inspection.py tracking --dataset-name 4_per_23
+```
+
+Evaluate a detection model:
+
+```bash
+python tools/dataset_inspection.py detection --dataset-name my_detection_dataset
+```
+
+### Command-Line Options
+
+The inspection tool supports the following arguments:
+
+| Argument | Description |
+|----------|-------------|
+| `mode` | Model type: `tracking` or `detection` |
+| `--dataset-name` | Name of cached dataset to evaluate |
+| `--custom-path` | Path to custom dataset (alternative to `--dataset-name`) |
+| `--model-path` | Specific model checkpoint to use (auto-detects latest if omitted) |
+| `--models-dir` | Directory containing model checkpoints (default: `models/`) |
+| `--batch-size` | Inference batch size (default: 128) |
+| `--num-workers` | Data loading workers (default: 4) |
+| `--device` | Device: `cuda`, `cpu`, or `auto` (default: `auto`) |
+| `--fiftyone-name` | Custom name for FiftyOne dataset |
+| `--no-launch` | Build dataset without launching viewer |
+| `--skip-download` | Skip automatic dataset download |
+
+### Example Workflows
+
+**Evaluate with Custom Model:**
+
+```bash
+python tools/dataset_inspection.py tracking \
+    --dataset-name 4_per_23 \
+    --model-path models/model_siamese_2025-01-15.pth
+```
+
+**Use Custom Dataset:**
+
+```bash
+python tools/dataset_inspection.py tracking \
+    --custom-path /path/to/my/validation/data
+```
+
+**Batch Processing (No Viewer Launch):**
+
+```bash
+python tools/dataset_inspection.py tracking \
+    --dataset-name 4_per_23 \
+    --fiftyone-name eval-experiment-1 \
+    --no-launch
+
+# Launch viewer separately when ready
+fiftyone app launch eval-experiment-1
+```
+
+### Visualization Features
+
+The FiftyOne viewer provides:
+
+**For Tracking Models:**
+
+- Predicted and ground truth heatmaps
+- Predicted and ground truth keypoints with confidence scores
+- Template and search image paths
+- Template/search ROI bounding boxes (when available)
+- Per-sample distance error metrics
+- Background sample tagging
+
+**For Detection Models:**
+
+- Predicted and ground truth heatmaps
+- Predicted and ground truth keypoints with confidence scores
+- Per-sample distance error metrics
+- Background sample tagging
+
+### Performance Metrics
+
+The tool automatically computes:
+
+- Euclidean distance between predicted and ground truth centroids
+- Model confidence scores per prediction
+- Success/failure rates across the validation set
+
+Use FiftyOne's filtering capabilities to analyze specific subsets, such as high-error samples or low-confidence predictions.
+
+---
+
 ## 📜 References
 
 See the original papers for the underlying architectures:  
