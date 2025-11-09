@@ -19,7 +19,7 @@ def resource_path(relative_path: str) -> Path:
     return base_path / relative_path
 
 
-def get_latest_model_path(directory, model_name):
+def get_latest_model_path(directory, model_name) -> str:
     """
     Find the latest model file in the given directory matching the base model name.
     Model files are expected to be named as: modelname_YYYY-MM-DD.pth
