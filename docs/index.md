@@ -53,27 +53,26 @@ Example tracking results demonstrating robust performance across challenging con
 *All examples shown are from held-out test data not used during training. Click on any image to watch the full video*
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=YrYQkCFcHMI">
-    <img src="media/2_per_12.gif" alt="vid1" width="90%"/>
+  <a href="https://youtu.be/ViL-Fy9lyCs">
+    <img src="media/7_per_12.gif" alt="vid1" width="56%"/>
+  </a>
+  <a href="https://youtu.be/YrYQkCFcHMI">
+    <img src="media/2_per_12.gif" alt="vid1" width="41%"/>
   </a>
   <br>
-  <em>Occlusion handling: Automatic trajectory recovery when fish passes behind tank structures</em>
+  <em>Reliable automatic tracking with challenging substrate background, with occlusion handling: Automatic trajectory recovery when fish passes behind tank structures.</em>
 </p>
 
+  <br>
 <p align="center">
   <a href="https://www.youtube.com/watch?v=u1tdceBCiqk">
-    <img src="media/4_per_8.gif" alt="vid2" width="90%"/>
+    <img src="media/4_per_8.gif" alt="vid2" width="50%"/>
   </a>
-  <br>
-  <em>Dense substrate tracking: Robust performance across complex textured floors with heterogeneous patterns</em>
-</p>
-
-<p align="center">
   <a href="https://youtu.be/pARO409KMNM">
-    <img src="media/6_per_22.gif" alt="vid3" width="90%"/>
+    <img src="media/6_per_22.gif" alt="vid3" width="48%"/>
   </a>
   <br>
-  <em>Low-light conditions: Reliable detection and quick recovery in challenging illumination</em>
+  <em>Low-light conditions: Reliable detection and quick recovery in challenging illumination.</em>
 </p>
 
 
