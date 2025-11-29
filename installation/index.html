@@ -700,13 +700,17 @@ To use GPU acceleration, install Aegear from source (see below).</p>
 <span class="nb">source</span><span class="w"> </span>.venv/bin/activate<span class="w">  </span><span class="c1"># Linux/macOS</span>
 .venv<span class="se">\S</span>cripts<span class="se">\a</span>ctivate<span class="w">     </span><span class="c1"># Windows</span>
 
-pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>cpu<span class="o">]</span>
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </code></pre></div></p>
-<p>This installs Aegear in editable mode along with developer tools (notebooks, training). For CUDA Torch version, there is a <code>cuda124</code> optional setup:
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>cuda124<span class="o">]</span>
+<p>This installs Aegear in editable mode. If you plan to run training jobs (dataset downloads and WebDataset loaders), layer in the lightweight training dependencies:
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>train<span class="o">]</span>
 </code></pre></div></p>
-<p>If you are planning on doing your own development and model training, be sure to also include the <code>dev</code> option:
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>cuda124,dev<span class="o">]</span>
+<p>For full development (notebooks, visualization tooling, HPO, etc.) use the broader <code>dev</code> extra instead:
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>dev<span class="o">]</span>
+</code></pre></div></p>
+<p>For CUDA-enabled Torch releases (currently supported runtime 12.8, PyTorch ≥2.9), add the extra index URL so pip installs GPU wheels rather than the CPU fallback:
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>train<span class="o">]</span><span class="w"> </span>--extra-index-url<span class="w"> </span>https://download.pytorch.org/whl/cu128
+<span class="c1"># or: pip install -e .[dev] --extra-index-url https://download.pytorch.org/whl/cu128</span>
 </code></pre></div></p>
 <hr />
 <h3 id="3-launch-the-gui">3. Launch the GUI</h3>

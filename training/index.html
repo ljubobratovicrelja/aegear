@@ -400,20 +400,35 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#training-scripts" class="md-nav__link">
+  <a href="#training-workflow" class="md-nav__link">
     <span class="md-ellipsis">
-      🔥 Training Scripts
+      🔥 Training Workflow
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔥 Training Workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recommended-cli-training-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommended: CLI Training Script
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#training-on-custom-dataset" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#notebook-based-training-deprecated" class="md-nav__link">
     <span class="md-ellipsis">
-      🚀 Training on Custom Dataset
+      ⚠️ Notebook-based Training (Deprecated)
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -638,20 +653,35 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#training-scripts" class="md-nav__link">
+  <a href="#training-workflow" class="md-nav__link">
     <span class="md-ellipsis">
-      🔥 Training Scripts
+      🔥 Training Workflow
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🔥 Training Workflow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recommended-cli-training-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recommended: CLI Training Script
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#training-on-custom-dataset" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#notebook-based-training-deprecated" class="md-nav__link">
     <span class="md-ellipsis">
-      🚀 Training on Custom Dataset
+      ⚠️ Notebook-based Training (Deprecated)
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -777,94 +807,33 @@
 </ul>
 <hr />
 <h2 id="dataset-setup">🗂️ Dataset Setup</h2>
-<p>The datasets are defined in <code>aegear.datasets</code> and support flexible configurations:  </p>
+<p>Aegear uses a unified dataset format for both detection and tracking model training: <code>WebTrackingDatasetWithLength</code>.</p>
 <ul>
-<li><strong>FishHeatmapDataset</strong></li>
-<li>Used for U-Net training.</li>
-<li>Inputs: Grayscale or RGB video frames.</li>
-<li>
-<p>Labels: Gaussian-blurred fish centroids as heatmaps.</p>
-</li>
-<li>
-<p><strong>SiameseFishDataset</strong></p>
-</li>
-<li>Used for Siamese tracker training.</li>
-<li>Pairs template and search images with offset targets.</li>
+<li>Data is stored in tar shard files, described by a manifest JSON.</li>
+<li>The loader function <code>load_dataset_from_shards</code> (see <a href="https://github.com/ljubobratovicrelja/aegear/blob/main/src/aegear/nn/datasets.py"><code>aegear.nn.datasets</code></a>) automatically splits shards into training and validation sets, and builds DataLoaders for both workflows.</li>
+<li>The same dataset structure is used for both EfficientUNet and Siamese models.</li>
 </ul>
-<p><strong>Data Augmentations</strong>:</p>
-<ul>
-<li>Random cropping and scaling.</li>
-<li>Flips and rotations.</li>
-<li>Brightness and contrast adjustments.</li>
-</ul>
-<p><strong>📥 Public Dataset</strong>:</p>
-<p>A preprocessed dataset for our training is publicly available:</p>
-<ul>
-<li>
-<p><a href="https://storage.googleapis.com/aegear-training-data/cache/detection.zip">Detection (U-Net) Dataset</a></p>
-</li>
-<li>
-<p><a href="https://storage.googleapis.com/aegear-training-data/cache/tracking.zip">Tracking (Siamese) Dataset</a></p>
-</li>
-</ul>
+<p><strong>📥 Public Data Bucket:</strong></p>
+<p>Training data shards are available for download from our public Google Cloud Storage bucket:</p>
+<div class="highlight"><pre><span></span><code>gs://aegear-training-data/shards
+</code></pre></div>
 <hr />
-<h2 id="training-scripts">🔥 Training Scripts</h2>
-<p>Training scripts are located in the <code>notebooks/</code> directory:  </p>
-<table>
-<thead>
-<tr>
-<th>Notebook</th>
-<th>Purpose</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>training_unet.ipynb</code></td>
-<td>Train EfficientUNet</td>
-</tr>
-<tr>
-<td><code>training_siamese.ipynb</code></td>
-<td>Train Siamese Tracker</td>
-</tr>
-</tbody>
-</table>
-<p>Each notebook provides step-by-step setup for loading datasets, initializing models, defining optimizers, and launching training loops. They are Jupyter notebooks to allow easy modification for custom datasets.</p>
-<hr />
-<h2 id="training-on-custom-dataset">🚀 Training on Custom Dataset</h2>
-<p>To train Aegear on your own data:  </p>
-<ol>
-<li><strong>Prepare Dataset</strong>  </li>
-<li>Structure your dataset similarly to the existing <code>FishHeatmapDataset</code> and <code>SiameseFishDataset</code> expectations.</li>
-<li>For U-Net:<ul>
-<li>Frames and corresponding centroid annotations.</li>
-</ul>
-</li>
-<li>
-<p>For Siamese Tracker:</p>
+<h2 id="training-workflow">🔥 Training Workflow</h2>
+<h3 id="recommended-cli-training-script">Recommended: CLI Training Script</h3>
+<p>For new projects and production training, use the CLI-based training script:</p>
 <ul>
-<li>Frame pairs with ground-truth offsets.</li>
+<li><code>tools/train.py</code> — Flexible command-line training for EfficientUNet and Siamese models.</li>
+<li>Supports all major training options via CLI arguments and environment variables.</li>
+<li>Designed for use with the Aegear Docker image (see <a href="../docker/">docker.md</a> for container usage and cloud deployment).</li>
 </ul>
-</li>
-<li>
-<p><strong>Edit Configuration</strong>  </p>
-</li>
-<li>
-<p>Update dataset paths and parameters in the training notebooks (<code>training_unet.ipynb</code>, <code>training_siamese.ipynb</code>).</p>
-</li>
-<li>
-<p><strong>Run Training</strong>  </p>
-</li>
-<li>
-<p>Launch Jupyter Notebook:
-     <div class="highlight"><pre><span></span><code>jupyter<span class="w"> </span>notebook<span class="w"> </span>notebooks/training_unet.ipynb
-jupyter<span class="w"> </span>notebook<span class="w"> </span>notebooks/training_siamese.ipynb
-</code></pre></div></p>
-</li>
-<li>
-<p><strong>Export Models</strong>  </p>
-</li>
-<li>Save trained weights in <code>data/models/</code> for Aegear to use in the GUI.</li>
-</ol>
+<p><strong>Example:</strong></p>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>tools/train.py<span class="w"> </span>--model-type<span class="w"> </span>efficient_unet<span class="w"> </span>--data-manifest<span class="w"> </span>/path/to/manifest.json<span class="w"> </span>--model-dir<span class="w"> </span>/path/to/models<span class="w"> </span>--checkpoint-dir<span class="w"> </span>/path/to/checkpoints<span class="w"> </span>--epochs<span class="w"> </span><span class="m">10</span><span class="w"> </span>--batch-size<span class="w"> </span><span class="m">128</span>
+</code></pre></div>
+<p>For containerized and cloud training, see <a href="../docker/">docker.md</a>.</p>
+<p>For cloud launching, hyperparameter optimization (HPO), and experiment orchestration, see <a href="../cloud_training/">Cloud Training &amp; HPO Pipeline</a>.</p>
+<hr />
+<h3 id="notebook-based-training-deprecated">⚠️ Notebook-based Training (Deprecated)</h3>
+<p>The legacy training notebooks (<code>notebooks/training_unet.ipynb</code>, <code>notebooks/training_siamese.ipynb</code>) are still available for development and experimentation, but are deprecated and will be removed in future releases. Please migrate to the CLI training workflow for all new work.</p>
 <hr />
 <h2 id="model-evaluation-and-dataset-inspection">🔍 Model Evaluation and Dataset Inspection</h2>
 <p>After training, you can evaluate your models and inspect predictions using the dataset inspection tool. The project includes a CLI utility provides visual analysis through FiftyOne, allowing you to review model predictions, identify failure cases, and measure performance metrics.</p>
@@ -982,10 +951,10 @@ fiftyone<span class="w"> </span>app<span class="w"> </span>launch<span class="w"
 <p>Use FiftyOne's filtering capabilities to analyze specific subsets, such as high-error samples or low-confidence predictions.</p>
 <hr />
 <h2 id="references">📜 References</h2>
-<p>See the original papers for the underlying architectures:<br />
-- Woo, S., Park, J., Lee, J.-Y., &amp; Kweon, I. S. (2018). CBAM: Convolutional Block Attention Module. <a href="https://arxiv.org/abs/1807.06521">arXiv:1807.06521</a><br />
-- Tan, M., &amp; Le, Q. V. (2019). EfficientNet. <a href="https://arxiv.org/abs/1905.11946">arXiv:1905.11946</a><br />
-- Ronneberger, O., Fischer, P., &amp; Brox, T. (2015). U-Net. <a href="https://arxiv.org/abs/1505.04597">arXiv:1505.04597</a><br />
+<p>See the original papers for the underlying architectures:
+- Woo, S., Park, J., Lee, J.-Y., &amp; Kweon, I. S. (2018). CBAM: Convolutional Block Attention Module. <a href="https://arxiv.org/abs/1807.06521">arXiv:1807.06521</a>
+- Tan, M., &amp; Le, Q. V. (2019). EfficientNet. <a href="https://arxiv.org/abs/1905.11946">arXiv:1905.11946</a>
+- Ronneberger, O., Fischer, P., &amp; Brox, T. (2015). U-Net. <a href="https://arxiv.org/abs/1505.04597">arXiv:1505.04597</a>
 - Bertinetto, L., et al. (2016). Fully-Convolutional Siamese Networks. <a href="https://arxiv.org/abs/1606.09549">arXiv:1606.09549</a></p>
 
 
