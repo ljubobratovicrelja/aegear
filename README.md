@@ -146,6 +146,8 @@ If you wish to train your own models, there is a convenient CLI-based training s
 python tools/train.py --model-type efficient_unet --data-manifest /path/to/manifest.json --model-dir /path/to/models --checkpoint-dir /path/to/checkpoints --epochs 10 --batch-size 128
 ```
 
+For more information on training features and capabilities supported by Aegear, see more [this page](https://ljubobratovicrelja.github.io/aegear/training/) within our documentation.
+
 ---
 
 ### Notebook-based Training (Deprecated)
