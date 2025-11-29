@@ -1,21 +1,27 @@
 import os
 import glob
 import json
+import io
 import random
+import itertools
 from pathlib import Path
-from typing import Tuple
-from collections import OrderedDict
+from typing import Tuple, Optional, Callable
 
 import cv2
 import numpy as np
 from scipy.interpolate import Rbf
 
+from tqdm import tqdm
+import webdataset as wds
+from google.cloud import storage
+
 from PIL import Image
 
 import torch
-from torch.utils.data import Dataset, ConcatDataset
+from torch.utils.data import Dataset, ConcatDataset, IterableDataset, DataLoader
 
 import torchvision.transforms as transforms
+
 
 
 class FishHeatmapDataset(Dataset):
@@ -1051,3 +1057,504 @@ class BackgroundWindowDataset(torch.utils.data.Dataset):
             return crop, crop, heatmap
         else:
             return crop, heatmap
+
+
+class WebTrackingDataset(IterableDataset):
+    """
+    Webdataset-based tracking dataset.
+    
+    Reads template/search image pairs and metadata from tar files.
+    Each sample contains (template, search, heatmap).
+    
+    Args:
+        tar_urls: Path or list of paths to tar files (can include wildcards)
+                  Examples: 
+                    - "path/to/tracking-{000000..000009}.tar"
+                    - ["path/to/shard1.tar", "path/to/shard2.tar"]
+                    - "s3://bucket/tracking-*.tar"
+        output_size: Size of output heatmap (default: 128)
+        gaussian_sigma: Sigma for Gaussian heatmap generation (default: 6.0)
+        shuffle: Whether to shuffle samples (default: True)
+        transform: Optional transform to apply to images
+        empty_check: If True, raises an error if no samples are found in shards
+    """
+    
+    def __init__(
+        self,
+        tar_urls,
+        output_size: int = 128,
+        gaussian_sigma: float = 6.0,
+        shuffle: bool = True,
+        transform: Optional[Callable] = None,
+        empty_check: bool = False,
+        max_samples: Optional[int] = None
+    ):
+        self.tar_urls = tar_urls
+        self.output_size = output_size
+        self.gaussian_sigma = gaussian_sigma
+        self.shuffle = shuffle
+        self.custom_transform = transform
+        self.empty_check = empty_check
+        self.max_samples = max_samples
+        
+        # Standard image preprocessing
+        self.to_tensor = transforms.ToTensor()
+        self.normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+        
+    def generate_heatmap(self, center):
+        """Generate Gaussian heatmap centered at the given position."""
+        x = torch.arange(0, self.output_size).float()
+        y = torch.arange(0, self.output_size).float()[:, None]
+        x0, y0 = center
+        heatmap = torch.exp(-((x - x0)**2 + (y - y0)**2) /
+                            (2 * self.gaussian_sigma**2))
+        return heatmap.unsqueeze(0)  # Shape: [1, H, W]
+    
+    def decode_sample(self, sample):
+        """
+        Decode a webdataset sample into (template, search, heatmap) tuple.
+        
+        Args:
+            sample: Dictionary containing keys like 'template.jpg', 'search.jpg', 'json'
+        
+        Returns:
+            Tuple of (template_tensor, search_tensor, heatmap_tensor)
+        """
+        # Load and preprocess template image
+        template_bytes = sample['template.jpg']
+        template = Image.open(io.BytesIO(template_bytes)).convert("RGB")
+        template = self.to_tensor(template)
+        template = self.normalize(template)
+        
+        # Load and preprocess search image
+        search_bytes = sample['search.jpg']
+        search = Image.open(io.BytesIO(search_bytes)).convert("RGB")
+        search = self.to_tensor(search)
+        search = self.normalize(search)
+        
+        # Load metadata
+        metadata = json.loads(sample['json'])
+        
+        # Generate heatmap
+        if metadata.get("background", False):
+            heatmap = torch.zeros((1, self.output_size, self.output_size))
+        else:
+            heatmap = self.generate_heatmap(metadata["centroid"])
+        
+        return template, search, heatmap
+    
+    def __iter__(self):
+        """Create an iterator over the dataset."""
+        # Create webdataset pipeline
+        dataset = wds.WebDataset(self.tar_urls, shardshuffle=False, empty_check=self.empty_check)
+        
+        # Optionally shuffle
+        if self.shuffle:
+            dataset = dataset.shuffle(1000)  # Shuffle buffer of 1000 samples
+        
+        # Map to our format
+        dataset = dataset.map(self.decode_sample)
+        
+        # Limit samples AFTER decoding to ensure hard limit per worker
+        if self.max_samples is not None:
+            # Get worker info to divide samples among workers
+            worker_info = torch.utils.data.get_worker_info()
+            if worker_info is not None:
+                # Multiple workers: each worker gets a portion of max_samples
+                per_worker = int(np.ceil(self.max_samples / worker_info.num_workers))
+                return itertools.islice(iter(dataset), per_worker)
+            else:
+                # Single worker: use all max_samples
+                return itertools.islice(iter(dataset), self.max_samples)
+        
+        return iter(dataset)
+
+
+class WebTrackingDatasetWithLength(WebTrackingDataset):
+    """
+    Extended version with approximate length for DataLoader compatibility.
+    
+    This is useful when you need a DataLoader with a known length for
+    progress bars or epoch-based training.
+    
+    Args:
+        tar_urls: Path or list of paths to tar files
+        length: Total number of samples in the dataset
+        output_size: Size of output heatmap (default: 128)
+        gaussian_sigma: Sigma for Gaussian heatmap generation (default: 6.0)
+        shuffle: Whether to shuffle samples (default: True)
+        transform: Optional transform to apply to images
+    """
+    
+    def __init__(
+        self,
+        tar_urls,
+        length: int,
+        output_size: int = 128,
+        gaussian_sigma: float = 6.0,
+        shuffle: bool = True,
+        transform: Optional[Callable] = None,
+        empty_check: bool = False
+    ):
+        super().__init__(tar_urls, output_size, gaussian_sigma, shuffle, transform, empty_check, max_samples=length)
+        self._length = length
+    
+    def __len__(self):
+        """Return the approximate length of the dataset."""
+        return self._length
+
+def fetch_shard_dataset(output_dir: str, verbose=True):
+    """Fetch the shards dataset from GCS to a given directory"""
+
+    # If output_dir does not exist, create it
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Check if we have write rights on this directory and that its empty
+    if not os.access(output_dir, os.W_OK):
+        raise PermissionError(f"Cannot write to directory: {output_dir}")
+    
+    if os.listdir(output_dir):
+        raise FileExistsError(f"Directory is not empty: {output_dir}")
+    
+    gcs_shards_dir = "shards"
+
+    # Initialize a guest client
+
+    client = storage.Client.create_anonymous_client()
+
+    bucket = client.bucket("aegear-training-data")
+    blobs = bucket.list_blobs(prefix=gcs_shards_dir)
+    blobs = tqdm(blobs, desc="Downloading shards") if verbose else blobs
+
+    # Tarballs and the manifest file
+    for blob in blobs: 
+        if not blob.name.endswith(".tar") and not blob.name.endswith(".json"):
+            continue
+
+        # Download to output_dir
+        destination_path = os.path.join(output_dir, os.path.basename(blob.name))
+        blob.download_to_filename(destination_path)
+
+def create_webdataset_from_manifest(
+    manifest_path: str,
+    output_size: int = 128,
+    gaussian_sigma: float = 6.0,
+    shuffle: bool = True,
+    autodownload: bool = True,
+    verbose: bool = True
+) -> WebTrackingDatasetWithLength:
+    """
+    Create a WebTrackingDataset from a manifest file.
+    
+    Args:
+        manifest_path: Path to the manifest JSON file
+        output_size: Size of output heatmap
+        gaussian_sigma: Sigma for Gaussian heatmap generation
+        shuffle: Whether to shuffle samples
+        autodownload: Whether to auto-download shards if not present
+        verbose: Whether to print download progress
+    
+    Raises:
+        ValueError: If number of tar files does not match num_shards in manifest.
+    
+    Returns:
+        WebTrackingDatasetWithLength instance.
+    """
+    # Get directory of manifest to build tar file paths
+    data_dir = os.path.dirname(manifest_path)
+
+    # If manifest or tar files do not exist, auto-download
+    if autodownload and (not os.path.exists(manifest_path) or not any(Path(data_dir).glob("*.tar"))):
+        if verbose:
+            print("Manifest or tar files not found. Auto-downloading shards...")
+        fetch_shard_dataset(data_dir, verbose=verbose)
+
+    with open(manifest_path, 'r') as f:
+        manifest = json.load(f)
+    
+    
+    # Check if the same directory contains the tar files
+    tar_files = sorted(Path(data_dir).glob("*.tar"))
+    tar_files = [str(f) for f in tar_files]
+
+    num_shards = manifest['num_shards']
+    total_samples = manifest['total_samples']
+
+    # Check num_shards matching with tar files found
+    if len(tar_files) != num_shards:
+        raise ValueError(
+            f"Number of tar files found ({len(tar_files)}) does not match num_shards in manifest ({num_shards}).")
+    
+    # Build the URL pattern for webdataset
+    # This assumes all shards follow the pattern in the manifest
+    prefix = manifest['shard_pattern'].split('-')[0]
+    tar_pattern = os.path.join(data_dir, f"{prefix}-{{000000..{num_shards-1:06d}}}.tar")
+    
+    return WebTrackingDatasetWithLength(
+        tar_urls=tar_pattern,
+        length=total_samples,
+        output_size=output_size,
+        gaussian_sigma=gaussian_sigma,
+        shuffle=shuffle
+    )
+
+def set_seed(seed: int = 42):
+    """Set random seed for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # For deterministic behavior (may impact performance)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def split_shards_train_val(
+    shard_dir: str,
+    train_ratio: float = 0.8,
+    seed: int = 42
+) -> tuple:
+    """
+    Split tar files into train and validation sets with a predictable seed.
+    
+    Args:
+        shard_dir: Directory containing the tar files
+        train_ratio: Ratio of data to use for training (default: 0.8)
+        seed: Random seed for reproducibility
+    
+    Returns:
+        Tuple of (train_tar_files, val_tar_files)
+    """
+    # Get all tar files
+    tar_files = sorted(Path(shard_dir).glob("*.tar"))
+    tar_files = [str(f) for f in tar_files]
+    
+    # Set seed for reproducible splitting
+    random.seed(seed)
+    random.shuffle(tar_files)
+    
+    # Split
+    split_idx = int(len(tar_files) * train_ratio)
+    train_files = tar_files[:split_idx]
+    val_files = tar_files[split_idx:]
+    
+    print(f"Split {len(tar_files)} shards into:")
+    print(f"  Training: {len(train_files)} shards")
+    print(f"  Validation: {len(val_files)} shards")
+    
+    return train_files, val_files
+
+
+def calculate_approximate_samples(tar_files: list, manifest_path: str = None) -> int:
+    """
+    Calculate approximate number of samples from tar files.
+    
+    If manifest is available, use it for accurate count.
+    Otherwise, estimate based on number of shards.
+    """
+    if manifest_path and os.path.exists(manifest_path):
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+        
+        total_samples = manifest['total_samples']
+        num_shards = manifest['num_shards']
+        
+        # Calculate samples for the given tar files
+        samples_per_shard = total_samples / num_shards
+        return int(len(tar_files) * samples_per_shard)
+    else:
+        # Rough estimate: assume 5000 samples per shard (default shard size)
+        return len(tar_files) * 5000
+
+def create_webdataset_from_manifest(
+    manifest_path: str,
+    output_size: int = 128,
+    gaussian_sigma: float = 6.0,
+    train_ratio: float = 0.8,
+    seed: int = 42,
+    autodownload: bool = True,
+    verbose: bool = True
+) -> Tuple[WebTrackingDatasetWithLength, WebTrackingDatasetWithLength]:
+    """
+    Create train and validation WebTrackingDatasets from a manifest file.
+    
+    Args:
+        manifest_path: Path to the manifest JSON file
+        output_size: Size of output heatmap
+        gaussian_sigma: Sigma for Gaussian heatmap generation
+        train_ratio: Ratio of data to use for training (default: 0.8)
+        seed: Random seed for reproducible splitting (default: 42)
+        autodownload: Whether to auto-download shards if not present
+        verbose: Whether to print download progress
+    
+    Returns:
+        Tuple of (train_dataset, val_dataset) as WebTrackingDatasetWithLength instances
+    
+    Raises:
+        ValueError: If number of tar files does not match num_shards in manifest
+    """
+    
+    # Get directory of manifest to build tar file paths
+    data_dir = os.path.dirname(manifest_path)
+
+    # If manifest or tar files do not exist, auto-download
+    if autodownload and (not os.path.exists(manifest_path) or not any(Path(data_dir).glob("*.tar"))):
+        if verbose:
+            print("Manifest or tar files not found. Auto-downloading shards...")
+        fetch_shard_dataset(data_dir, verbose=verbose)
+
+    # Load manifest
+    with open(manifest_path, 'r') as f:
+        manifest = json.load(f)
+    
+    # Check if the same directory contains the tar files
+    tar_files = sorted(Path(data_dir).glob("*.tar"))
+    tar_files = [str(f) for f in tar_files]
+    
+    num_shards = manifest['num_shards']
+    total_samples = manifest['total_samples']
+    
+    # Check num_shards matching with tar files found
+    if len(tar_files) != num_shards:
+        raise ValueError(
+            f"Number of tar files found ({len(tar_files)}) does not match num_shards in manifest ({num_shards})")
+    
+    # Split tar files into train/val with seed
+    random.seed(seed)
+    random.shuffle(tar_files)
+    
+    split_idx = int(len(tar_files) * train_ratio)
+    train_files = tar_files[:split_idx]
+    val_files = tar_files[split_idx:]
+    
+    print(f"Split {len(tar_files)} shards into:")
+    print(f"  Training: {len(train_files)} shards")
+    print(f"  Validation: {len(val_files)} shards")
+    
+    # Calculate approximate samples per split
+    samples_per_shard = total_samples / num_shards
+    train_samples = int(len(train_files) * samples_per_shard)
+    val_samples = int(len(val_files) * samples_per_shard)
+    
+    print(f"  Approximate samples - Train: {train_samples}, Val: {val_samples}")
+    
+    # Create train dataset
+    train_dataset = WebTrackingDatasetWithLength(
+        tar_urls=train_files,
+        length=train_samples,
+        output_size=output_size,
+        gaussian_sigma=gaussian_sigma,
+        shuffle=True,  # Shuffle training data
+        empty_check=False
+    )
+    
+    # Create validation dataset
+    val_dataset = WebTrackingDatasetWithLength(
+        tar_urls=val_files,
+        length=val_samples,
+        output_size=output_size,
+        gaussian_sigma=gaussian_sigma,
+        shuffle=False,  # Don't shuffle validation data
+        empty_check=False
+    )
+    
+    return train_dataset, val_dataset
+
+def load_dataset_from_shards(manifest_path: str,
+                             output_size: int = 128,
+                             gaussian_sigma: float = 6.0,
+                             batch_size: int = 128,
+                             train_ratio: float = 0.8,
+                             num_workers: int = 0,
+                             seed: int = 42,
+                             autodownload: bool = True,
+                             verbose: bool = True) -> tuple:
+    """
+    Load training and validation datasets from tar shards.
+    
+    Args:
+        manifest_path: Path to the manifest JSON file
+        output_size: Size of output heatmap
+        gaussian_sigma: Sigma for Gaussian heatmap generation
+        batch_size: Batch size for DataLoader
+        train_ratio: Ratio of data to use for training
+        num_workers: Number of DataLoader workers
+        seed: Random seed for reproducibility
+        autodownload: Whether to auto-download shards if not present
+        verbose: Whether to print download progress
+    Returns:
+        Tuple of (train_dataset, val_dataset)
+    """
+    train_dataset, val_dataset = create_webdataset_from_manifest(
+        manifest_path=manifest_path,
+        output_size=output_size,
+        gaussian_sigma=gaussian_sigma,
+        train_ratio=train_ratio,
+        seed=seed,
+        autodownload=autodownload,
+        verbose=verbose
+    )
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        num_workers=num_workers
+    )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        num_workers=num_workers
+    )
+
+    return train_loader, val_loader
+
+if __name__ == "__main__":
+    """Temporary test - to be deleted later."""
+
+    # Set seed for reproducibility
+    set_seed(42)
+
+    data_dir = "data/training/tracking_merged"
+    batch_size = 128
+    
+    # Split shards into train/val
+    train_files, val_files = split_shards_train_val(
+        data_dir,
+        train_ratio=0.8,
+        seed=42
+    )
+    
+    # Create datasets
+    train_dataset = WebTrackingDataset(
+        tar_urls=train_files,
+        output_size=128,
+        gaussian_sigma=6.0,
+        shuffle=True
+    )
+    
+    val_dataset = WebTrackingDataset(
+        tar_urls=val_files,
+        output_size=128,
+        gaussian_sigma=6.0,
+        shuffle=False  # Don't shuffle validation
+    )
+    
+    # Create dataloaders
+    # Note: num_workers > 0 with IterableDataset requires careful setup
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        num_workers=0  # Start with 0, can increase if needed
+    )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        num_workers=0
+    )

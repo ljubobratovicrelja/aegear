@@ -1,0 +1,50 @@
+# HPO refinement - search space designed based on the outcome of the hpo_config.yaml experiment.
+
+search_space:
+  gaussian_sigma:
+    values: [8.0, 10.0, 12.0]
+
+  pos_weight:
+    values: [2.0, 5.0, 8.0]
+
+  lr:
+    values: [0.003, 0.005, 0.008]
+
+  sparsity_weight:
+    values: [0.1, 0.5, 1.0]
+    description: "Penalize false positive blobs"
+
+  centroid_weight:
+    values: [0.0]
+
+  dice_weight:
+    values: [1.0]
+
+  batch_size: { values: [256] }
+  weight_decay: { values: [0.00001] }
+  scheduler_type: { values: ["OneCycleLR"] }
+  cbam: { values: [true] }
+  activation: { values: ["gelu"] }
+
+# Training configuration
+training:
+  epochs: 8
+  num_workers: 6
+  model_type: "siamese"
+  branch: "hpo"
+
+# RunPod configuration
+runpod:
+  gpu_type: "NVIDIA GeForce RTX 3090"
+  docker_image: "docker.io/ljubobratovicrelja/aegear:latest"
+  volume_size: 10
+  container_disk_size: 8
+
+# ClearML configuration
+clearml:
+  project_name: "aegear-hpo-siamese"
+
+# Optimization settings
+optimization:
+  objective_metric: "within_10px" # Metric to optimize
+  max_tests: 50 # Maximum number of experiments (null = all combinations)

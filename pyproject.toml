@@ -10,26 +10,35 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "matplotlib>=3.7.0",
-    "numpy>=1.24.0",
+    "numpy>=2.3.5",
     "opencv-contrib-python>=4.11.0.86",
     "opencv-python>=4.11.0.86",
-    "Pillow>=9.2.0,<11.0.0",
+    "Pillow>=12.0.0",
     "scipy>=1.11.0",
+    "torch>=2.9",
+    "torchvision>=0.24",
 ]
 
 [project.optional-dependencies]
-cpu = ["torch>=2.6,<2.7", "torchvision>=0.21,<0.22"]
-cuda124 = ["torch>=2.6,<2.7", "torchvision>=0.21,<0.22"]
+train = [
+    "tqdm>=4.65.0",
+    "google-cloud-storage>=3.5.0",
+    "webdataset>=1.0.2",
+    "hpbandster>=0.7.4",
+]
+
 dev = [
     "kornia>=0.8.0",
-    "tqdm>=4.65.0",
     "tensorboard>=2.19.0",
-    "ipykernel>=6.29.0",
+    "ipykernel>=7.1.0",
     "gdown>=5.0.0",
     "ipywidgets>=8.0.0",
     "scikit-learn>=1.6.0",
-    "google-cloud-storage>=3.5.0",
     "fiftyone>=1.10.0",
+    "clearml>=2.0.0",
+    "tqdm>=4.65.0",
+    "google-cloud-storage>=3.5.0",
+    "webdataset>=1.0.2",
 ]
 
 [project.urls]

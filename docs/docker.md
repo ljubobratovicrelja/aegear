@@ -1,3 +1,4 @@
+
 # 🐳 Docker Support
 
 Aegear provides a ready-to-use Docker image to simplify deployment and training in cloud environments or on systems without a configured Python environment.
@@ -6,13 +7,13 @@ Aegear provides a ready-to-use Docker image to simplify deployment and training 
 
 ## 📦 Public Docker Image
 
-The official Aegear Docker image is hosted on Docker Hub:  
+The official Aegear Docker image is hosted on [Docker Hub]():
 
 ```
 ljubobratovicrelja/aegear:latest
 ```
 
-Pull the image with:  
+Pull the image with:
 
 ```bash
 docker pull ljubobratovicrelja/aegear:latest
@@ -22,13 +23,13 @@ docker pull ljubobratovicrelja/aegear:latest
 
 ## 🚀 Running the Image
 
-Launch a container with GPU support (if available):  
+Launch a container with GPU support (if available):
 
 ```bash
 docker run --gpus all -it ljubobratovicrelja/aegear:latest
 ```
 
-To mount a local directory for accessing datasets or saving models:  
+To mount a local directory for accessing datasets or saving models:
 
 ```bash
 docker run --gpus all -it -v /path/to/data:/workspace/data ljubobratovicrelja/aegear:latest
@@ -38,55 +39,21 @@ This will mount `/path/to/data` on your host to `/workspace/data` inside the con
 
 ---
 
-## 🛠 Custom Training with Docker
+## 🛠️ Training with Docker
 
-The public image includes all dependencies for running Aegear and training on the provided dataset. For custom datasets or workflows:  
+The recommended workflow for training models is to use the CLI-based training script via the container entrypoint. The image includes all dependencies and uses `run_training.sh` to configure and launch training.
 
-1. **Clone and Extend**  
-   Clone the Aegear repository and modify the Dockerfile as needed:  
-   ```bash
-   git clone https://github.com/ljubobratovicrelja/aegear.git
-   cd aegear
-   docker build -t aegear-custom .
-   ```
+**Example:**
 
-2. **Custom Parameters**  
-   When launching the container, you can specify:  
-   - **Which notebook** to use (`training_unet.ipynb` or `training_siamese.ipynb`)
-   - **Which branch** of the repository (defaults to `main`)  
-   
-   Example:  
-   ```bash
-   docker run --gpus all -e NOTEBOOK=training_siamese.ipynb -e BRANCH=dev -it ljubobratovicrelja/aegear:latest
-   ```
+```bash
+docker run --gpus all -e MODEL_TYPE=efficient_unet -e DATA_MANIFEST=/workspace/data/manifest.json -e MODEL_DIR=/workspace/models/unet -e CHECKPOINT_DIR=/workspace/models/unet/checkpoints ljubobratovicrelja/aegear:latest
+```
 
-   > 📌 Currently, this works for the main repository. Support for forks can be added easily by adjusting the Dockerfile’s repository source.
-
-3. **Mount Your Data**  
-   Mount your dataset and configuration files into the container using `-v`.
-
-4. **Run Training Scripts**  
-   Inside the container, launch Jupyter notebooks or Python scripts from the `notebooks/` directory:  
-   ```bash
-   jupyter notebook notebooks/training_unet.ipynb
-   jupyter notebook notebooks/training_siamese.ipynb
-   ```
+Set additional environment variables to customize training (see [docker/README.md](https://github.com/ljubobratovicrelja/aegear/blob/hpo/docker/README.md) for details).
 
 ---
 
-## 📖 Notes
+## ⚠️ Notebook-based Training (Deprecated)
 
-- **GPU Support**: Requires NVIDIA drivers and Docker with NVIDIA runtime (`nvidia-docker2`).
-- **Cloud Deployment**: Compatible with Google Cloud, AWS, and Azure GPU instances.
-- **Extending**: For additional libraries or dependencies, create a new Dockerfile based on `ljubobratovicrelja/aegear:latest`.
+Notebook-based training (`training_unet.ipynb`, `training_siamese.ipynb`) is still available for development, but is deprecated and will be removed in future releases. Please use the CLI training workflow for new projects.
 
----
-
-## 📦 Source Dockerfile
-
-The Dockerfile used to build the public image is included in the repository at:  
-```
-aegear/Dockerfile
-```
-
-This can serve as a starting point for creating your own custom images.

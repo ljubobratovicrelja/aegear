@@ -28,69 +28,47 @@ Aegear uses two deep learning models:
 
 ## 🗂️ Dataset Setup
 
-The datasets are defined in `aegear.datasets` and support flexible configurations:  
+Aegear uses a unified dataset format for both detection and tracking model training: `WebTrackingDatasetWithLength`.
 
-- **FishHeatmapDataset**
-  - Used for U-Net training.
-  - Inputs: Grayscale or RGB video frames.
-  - Labels: Gaussian-blurred fish centroids as heatmaps.
+- Data is stored in tar shard files, described by a manifest JSON.
+- The loader function `load_dataset_from_shards` (see [`aegear.nn.datasets`](https://github.com/ljubobratovicrelja/aegear/blob/main/src/aegear/nn/datasets.py)) automatically splits shards into training and validation sets, and builds DataLoaders for both workflows.
+- The same dataset structure is used for both EfficientUNet and Siamese models.
 
-- **SiameseFishDataset**
-  - Used for Siamese tracker training.
-  - Pairs template and search images with offset targets.
+**📥 Public Data Bucket:**
 
-**Data Augmentations**:
+Training data shards are available for download from our public Google Cloud Storage bucket:
 
-  - Random cropping and scaling.
-  - Flips and rotations.
-  - Brightness and contrast adjustments.
-
-**📥 Public Dataset**:
-
-A preprocessed dataset for our training is publicly available:
-
-  - [Detection (U-Net) Dataset](https://storage.googleapis.com/aegear-training-data/cache/detection.zip)
-
-  - [Tracking (Siamese) Dataset](https://storage.googleapis.com/aegear-training-data/cache/tracking.zip)
+```
+gs://aegear-training-data/shards
+```
 
 ---
 
-## 🔥 Training Scripts
+## 🔥 Training Workflow
 
-Training scripts are located in the `notebooks/` directory:  
+### Recommended: CLI Training Script
 
-| Notebook                  | Purpose                 |
-|---------------------------|-------------------------|
-| `training_unet.ipynb`     | Train EfficientUNet     |
-| `training_siamese.ipynb`  | Train Siamese Tracker   |
+For new projects and production training, use the CLI-based training script:
 
-Each notebook provides step-by-step setup for loading datasets, initializing models, defining optimizers, and launching training loops. They are Jupyter notebooks to allow easy modification for custom datasets.
+- `tools/train.py` — Flexible command-line training for EfficientUNet and Siamese models.
+- Supports all major training options via CLI arguments and environment variables.
+- Designed for use with the Aegear Docker image (see [docker.md](docker.md) for container usage and cloud deployment).
+
+**Example:**
+
+```bash
+python tools/train.py --model-type efficient_unet --data-manifest /path/to/manifest.json --model-dir /path/to/models --checkpoint-dir /path/to/checkpoints --epochs 10 --batch-size 128
+```
+
+For containerized and cloud training, see [docker.md](docker.md).
+
+For cloud launching, hyperparameter optimization (HPO), and experiment orchestration, see [Cloud Training & HPO Pipeline](cloud_training.md).
 
 ---
 
-## 🚀 Training on Custom Dataset
+### ⚠️ Notebook-based Training (Deprecated)
 
-To train Aegear on your own data:  
-
-1. **Prepare Dataset**  
-   - Structure your dataset similarly to the existing `FishHeatmapDataset` and `SiameseFishDataset` expectations.
-   - For U-Net:
-     - Frames and corresponding centroid annotations.
-   - For Siamese Tracker:
-     - Frame pairs with ground-truth offsets.
-
-2. **Edit Configuration**  
-   - Update dataset paths and parameters in the training notebooks (`training_unet.ipynb`, `training_siamese.ipynb`).
-
-3. **Run Training**  
-   - Launch Jupyter Notebook:
-     ```bash
-     jupyter notebook notebooks/training_unet.ipynb
-     jupyter notebook notebooks/training_siamese.ipynb
-     ```
-
-4. **Export Models**  
-   - Save trained weights in `data/models/` for Aegear to use in the GUI.
+The legacy training notebooks (`notebooks/training_unet.ipynb`, `notebooks/training_siamese.ipynb`) are still available for development and experimentation, but are deprecated and will be removed in future releases. Please migrate to the CLI training workflow for all new work.
 
 ---
 
@@ -201,8 +179,8 @@ Use FiftyOne's filtering capabilities to analyze specific subsets, such as high-
 
 ## 📜 References
 
-See the original papers for the underlying architectures:  
-- Woo, S., Park, J., Lee, J.-Y., & Kweon, I. S. (2018). CBAM: Convolutional Block Attention Module. [arXiv:1807.06521](https://arxiv.org/abs/1807.06521)  
-- Tan, M., & Le, Q. V. (2019). EfficientNet. [arXiv:1905.11946](https://arxiv.org/abs/1905.11946)  
-- Ronneberger, O., Fischer, P., & Brox, T. (2015). U-Net. [arXiv:1505.04597](https://arxiv.org/abs/1505.04597)  
+See the original papers for the underlying architectures:
+- Woo, S., Park, J., Lee, J.-Y., & Kweon, I. S. (2018). CBAM: Convolutional Block Attention Module. [arXiv:1807.06521](https://arxiv.org/abs/1807.06521)
+- Tan, M., & Le, Q. V. (2019). EfficientNet. [arXiv:1905.11946](https://arxiv.org/abs/1905.11946)
+- Ronneberger, O., Fischer, P., & Brox, T. (2015). U-Net. [arXiv:1505.04597](https://arxiv.org/abs/1505.04597)
 - Bertinetto, L., et al. (2016). Fully-Convolutional Siamese Networks. [arXiv:1606.09549](https://arxiv.org/abs/1606.09549)

@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 import fiftyone as fo
 
-from aegear.training import get_centroids_per_sample
+from aegear.nn.training import get_centroids_per_sample
 
 
 class FiftyOneDatasetBuilder:

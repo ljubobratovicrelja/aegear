@@ -5,7 +5,7 @@ import cv2
 import torch
 import torchvision.transforms as transforms
 
-from aegear.model import EfficientUNet, SiameseTracker
+from aegear.nn.model import EfficientUNet, SiameseTracker
 from aegear.video import VideoClip
 from aegear.gui.progress_reporter import ProgressReporter
 

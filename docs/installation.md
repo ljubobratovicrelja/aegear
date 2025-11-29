@@ -45,17 +45,23 @@ python -m venv .venv
 source .venv/bin/activate  # Linux/macOS
 .venv\Scripts\activate     # Windows
 
-pip install -e .[cpu]
+pip install -e .
 ```
 
-This installs Aegear in editable mode along with developer tools (notebooks, training). For CUDA Torch version, there is a `cuda124` optional setup:
+This installs Aegear in editable mode. If you plan to run training jobs (dataset downloads and WebDataset loaders), layer in the lightweight training dependencies:
 ```bash
-pip install -e .[cuda124]
+pip install -e .[train]
 ```
 
-If you are planning on doing your own development and model training, be sure to also include the `dev` option:
+For full development (notebooks, visualization tooling, HPO, etc.) use the broader `dev` extra instead:
 ```bash
-pip install -e .[cuda124,dev]
+pip install -e .[dev]
+```
+
+For CUDA-enabled Torch releases (currently supported runtime 12.8, PyTorch ≥2.9), add the extra index URL so pip installs GPU wheels rather than the CPU fallback:
+```bash
+pip install -e .[train] --extra-index-url https://download.pytorch.org/whl/cu128
+# or: pip install -e .[dev] --extra-index-url https://download.pytorch.org/whl/cu128
 ```
 
 ---

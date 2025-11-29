@@ -30,8 +30,8 @@ from aegear.video import VideoClip
 DEFAULT_CALIBRATION_FILE = resource_path("config/calibration.xml")
 LOGO_FILE = resource_path("docs/media/logo.png")
 HEATMAP_MODEL_PATH = resource_path(
-    "models/model_efficient_unet_2025-05-26.pth")
-SIAMESE_MODEL_PATH = resource_path("models/model_siamese_2025-11-08.pth")
+    "models/model_efficient_unet_2025-11-21.pth")
+SIAMESE_MODEL_PATH = resource_path("models/model_siamese_2025-11-21.pth")
 
 
 class AegearMainWindow(tk.Tk):

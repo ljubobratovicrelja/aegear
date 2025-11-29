@@ -79,20 +79,34 @@ This modular pipeline supports robust fish localization, trajectory analysis, an
 Aegear can be installed either for development use in notebooks or as a GUI-based application.
 
 🔧 Development / Notebook Usage
-To install Aegear in editable mode with additional dependencies for training, notebooks, and analysis:
+To install Aegear in editable mode:
 
 ```bash
 git clone https://github.com/ljubobratovicrelja/aegear.git
 cd aegear
-pip install -e .[cpu,dev]
+pip install -e .
 ```
 
-For CUDA Torch version, there is a `cuda124` optional setup:
+For training workloads (dataset downloads, WebDataset loaders, etc.), add the lighter `train` extra:
+
 ```bash
-pip install -e .[cuda124,dev]
+pip install -e .[train]
 ```
 
-**Note**: Best do this in an virtual environment because of heavy dependencies that Aegear carries along with its install.
+Need the full development toolkit (notebooks, visualization, HPO tooling, FiftyOne, …)? Use the broader `dev` extra:
+
+```bash
+pip install -e .[dev]
+```
+
+For CUDA Torch versions (currently assuming CUDA runtime 12.8 and PyTorch ≥2.9) remember the extra index URL, otherwise pip falls back to CPU wheels:
+
+```bash
+pip install -e .[train] --extra-index-url https://download.pytorch.org/whl/cu128
+# or: pip install -e .[dev] --extra-index-url https://download.pytorch.org/whl/cu128
+```
+
+**Note**: Prefer a virtual environment—the dev extra in particular pulls in heavy dependencies.
 
 This mode is ideal for working with Jupyter notebooks or customizing the codebase.
 
@@ -117,6 +131,26 @@ There are also included binaries made using PyInstaller for Win64 and macOS mach
 > A more flexible and general-purpose GUI for broader use cases is under active development.
 
 ---
+
+## Neural Network Training
+
+If you wish to train your own models, there is a convenient CLI-based training script:
+
+- `tools/train.py` — Flexible command-line training for EfficientUNet and Siamese models.
+- Supports all major training options via CLI arguments and environment variables.
+- Designed for use with the Aegear Docker image (see [docker/README.md](docker/README.md) for container usage and cloud deployment).
+
+**Example:**
+
+```bash
+python tools/train.py --model-type efficient_unet --data-manifest /path/to/manifest.json --model-dir /path/to/models --checkpoint-dir /path/to/checkpoints --epochs 10 --batch-size 128
+```
+
+---
+
+### Notebook-based Training (Deprecated)
+
+The legacy training notebooks (`notebooks/training_unet.ipynb`, `notebooks/training_siamese.ipynb`) are still available for development and experimentation, but are deprecated and will be removed in future releases. Please migrate to the CLI training workflow for all new work.
 
 ## 🤝 Contributions & Collaboration
 

@@ -8,7 +8,7 @@ video files and frames. Extracted samples are saved to a specified directory and
 file is maintained.
 
 Usage:
-    python trainingdataextraction.py <data_collection_descriptor>.json
+    python training_data_extraction.py <data_collection_descriptor>.json
 
 Data Collection Descriptor JSON must include:
     - videosRoot: Directory containing video files.

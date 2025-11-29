@@ -1,5 +1,7 @@
 data/videos/
+data/video/
 data/training/
+data/tracking/
 lib/
 etc/
 bin/

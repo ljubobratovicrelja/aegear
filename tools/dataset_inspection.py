@@ -11,8 +11,8 @@ import os
 import sys
 import torch
 
-from aegear.model import SiameseTracker, EfficientUNet
-from aegear.datasets import CachedTrackingDataset, CachedDetectionDataset
+from aegear.nn.model import SiameseTracker, EfficientUNet
+from aegear.nn.datasets import CachedTrackingDataset, CachedDetectionDataset
 from aegear.utils import get_latest_model_path, download_dataset, load_model_with_weights
 from aegear.visualization import (
     TrackingDatasetBuilder,

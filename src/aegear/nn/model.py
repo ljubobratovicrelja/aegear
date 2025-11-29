@@ -4,6 +4,25 @@ from torchvision.models import efficientnet_b0
 import torch.nn.functional as F
 
 
+def _make_activation(activation_cls):
+    """
+    Create an activation instance, using inplace=True if supported.
+    
+    Args:
+        activation_cls: Activation class (e.g., nn.ReLU, nn.GELU)
+    
+    Returns:
+        Activation instance with inplace=True if supported, otherwise without.
+    """
+    # Activations that support inplace parameter
+    inplace_supported = (nn.ReLU, nn.LeakyReLU, nn.SiLU, nn.RReLU, nn.CELU, nn.Threshold)
+    
+    if isinstance(activation_cls, type) and issubclass(activation_cls, inplace_supported):
+        return activation_cls(inplace=True)
+    else:
+        return activation_cls()
+
+
 class CBAM(nn.Module):
     """Lightweight convolutional block attention module (CBAM) for channel and spatial attention."""
 
@@ -13,7 +32,7 @@ class CBAM(nn.Module):
         self.channel = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(in_channels, in_channels // 8, 1),
-            nn.ReLU(inplace=True),
+            nn.SiLU(inplace=True),
             nn.Conv2d(in_channels // 8, in_channels, 1),
             nn.Sigmoid()
         )
@@ -54,8 +73,10 @@ class EfficientUNet(nn.Module):
     are multiple objects present in the image.
     """
 
-    def __init__(self, weights=None):
+    def __init__(self, weights=None, use_cbam=True, activation=nn.SiLU):
         super().__init__()
+        self.use_cbam = use_cbam
+        self.activation = activation
         backbone = efficientnet_b0(weights=weights)
         features = list(backbone.features.children())
 
@@ -70,51 +91,54 @@ class EfficientUNet(nn.Module):
         self.bottleneck = nn.Sequential(
             nn.Conv2d(112, 256, kernel_size=3, padding=2, dilation=2),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            _make_activation(activation),
             nn.Conv2d(256, 256, kernel_size=3, padding=1),
             nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            _make_activation(activation),
         )
-        self.att_bottleneck = CBAM(256)
+
+        self.att_bottleneck = CBAM(256) if use_cbam else nn.Identity()
 
         # Decoder with CBAM after skip merges
-        self.att4 = CBAM(256 + 112)
-        self.up4 = self._conf_block(256 + 112, 64)  # S/16 -> S/16
+        self.att4 = CBAM(256 + 112) if use_cbam else nn.Identity()
+        self.up4 = self._conf_block(256 + 112, 64)
 
-        self.att3 = CBAM(64 + 80)
+        self.att3 = CBAM(64 + 80) if use_cbam else nn.Identity()
         self.up3 = self._up_block(64 + 80, 32)
 
-        self.att2 = CBAM(32 + 40)
+        self.att2 = CBAM(32 + 40) if use_cbam else nn.Identity()
         self.up2 = self._up_block(32 + 40, 24)
 
-        self.att1 = CBAM(24 + 24)
+        self.att1 = CBAM(24 + 24) if use_cbam else nn.Identity()
         self.up1 = self._up_block(24 + 24, 16)
 
-        self.att0 = CBAM(16 + 16)
+        self.att0 = CBAM(16 + 16) if use_cbam else nn.Identity()
         self.up0 = self._up_block(16 + 16, 8)
 
         # Final 1-channel output
         self.out = nn.Conv2d(8, 1, kernel_size=1)
 
     def _up_block(self, in_ch, out_ch):
+        act = self.activation
         return nn.Sequential(
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
             nn.Conv2d(in_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
+            _make_activation(act),
             nn.Conv2d(out_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
+            _make_activation(act),
         )
 
     def _conf_block(self, in_ch, out_ch):
+        act = self.activation
         return nn.Sequential(
             nn.Conv2d(in_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
+            _make_activation(act),
             nn.Conv2d(out_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
+            _make_activation(act),
         )
 
     def forward(self, x):
@@ -193,6 +217,7 @@ class SiameseTracker(nn.Module):
 
         # Decoder blocks with adjusted input channel sizes for concatenated Siamese features
         # The input channels to att/up blocks will be double the UNet's combined input
+
         self.att4 = CBAM(256 * 2 + 112 * 2)
         self.up4 = unet._conf_block(256 * 2 + 112 * 2, 64)
 
