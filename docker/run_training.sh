@@ -170,7 +170,7 @@ ARGS="$ARGS --model-dir=$MODEL_DIR --pretrained-model-dir=$PRETRAINED_MODEL_DIR 
 [ ! -z "$USE_BEST_MODEL" ] && [ "$USE_BEST_MODEL" != "0" ] && ARGS="$ARGS --use-best-model"
 [ ! -z "$EPOCHS" ] && ARGS="$ARGS --epochs=$EPOCHS"
 [ ! -z "$LR" ] && ARGS="$ARGS --lr=$LR"
-[ ! -z "$TRAINING_STAGES" ] && ARGS="$ARGS --training-stages=$TRAINING_STAGES"
+[ ! -z "$TRAINING_STAGES" ] && ARGS="$ARGS --training-stages='$TRAINING_STAGES'"
 [ ! -z "$LOSS_PARAMS" ] && ARGS="$ARGS --loss-params=$LOSS_PARAMS"
 [ ! -z "$CONFIG" ] && ARGS="$ARGS --config=$CONFIG"
 [ ! -z "$CBAM" ] && [ "$CBAM" != "0" ] && ARGS="$ARGS --cbam"

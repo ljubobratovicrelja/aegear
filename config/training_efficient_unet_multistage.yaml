@@ -41,29 +41,29 @@ parameters:
   use_visualizer: true
   verbose: true
 
-# Training stages - Progressive unfreezing strategy
-training_stages:
-  stages:
-    # Stage 1: Train decoder only with frozen encoder
-    # This helps the decoder learn good initial features
-    - name: "Stage 1 - Decoder training"
-      freeze_layers: ["enc1", "enc2", "enc3", "enc4"]
-      epochs: 10
-      lr: 0.005 # Higher LR for initial training
+  # Training stages - Progressive unfreezing strategy
+  training_stages:
+    stages:
+      # Stage 1: Train decoder only with frozen encoder
+      # This helps the decoder learn good initial features
+      - name: "Stage 1 - Decoder training"
+        freeze_layers: ["enc1", "enc2", "enc3", "enc4"]
+        epochs: 10
+        lr: 0.005 # Higher LR for initial training
 
-    # Stage 2: Unfreeze upper encoder layers
-    # Fine-tune with moderate learning rate
-    - name: "Stage 2 - Upper layer fine-tuning"
-      freeze_layers: ["enc1", "enc2"] # Keep lower layers frozen
-      epochs: 8
-      lr: 0.002 # Moderate LR
+      # Stage 2: Unfreeze upper encoder layers
+      # Fine-tune with moderate learning rate
+      - name: "Stage 2 - Upper layer fine-tuning"
+        freeze_layers: ["enc1", "enc2"] # Keep lower layers frozen
+        epochs: 8
+        lr: 0.002 # Moderate LR
 
-    # Stage 3: Fine-tune entire network
-    # Final polish with low learning rate
-    - name: "Stage 3 - Full network fine-tuning"
-      freeze_layers: [] # No layers frozen
-      epochs: 7
-      lr: 0.0005 # Low LR for fine-tuning
+      # Stage 3: Fine-tune entire network
+      # Final polish with low learning rate
+      - name: "Stage 3 - Full network fine-tuning"
+        freeze_layers: [] # No layers frozen
+        epochs: 7
+        lr: 0.0005 # Low LR for fine-tuning
 
 # RunPod configuration
 runpod:

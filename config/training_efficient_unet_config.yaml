@@ -47,6 +47,21 @@ parameters:
   use_visualizer: true
   verbose: true
 
+  # Training stages configuration (optional)
+  # If not specified, default single-stage training is used with epochs/lr from parameters
+  # Uncomment to enable multi-stage training with progressive layer unfreezing
+  training_stages:
+    stages:
+      - name: "Stage 1 - Train only one layer of encoder (enc5) and the decoder"
+        freeze_layers: ["enc1", "enc2", "enc3", "enc4"]
+        epochs: 10
+        lr: 0.005
+
+      - name: "Stage 2 - unlock finer layers of the encoder as well."
+        freeze_layers: ["enc1", "enc2"]
+        epochs: 10
+        lr: 0.001
+
   # Advanced options (uncomment and set as needed)
   # train_ratio: 0.8
   # weights: null
@@ -54,7 +69,6 @@ parameters:
   # seed: 42
   # continue_training: false
   # use_best_model: false
-  # training_stages: null
 
 # RunPod configuration
 runpod:
@@ -69,21 +83,6 @@ runpod:
   auto_terminate: true # Set to false to prevent automatic termination
   check_interval: 60 # Seconds between status checks
   timeout_hours: 24 # Maximum hours before force termination
-
-# Training stages configuration (optional)
-# If not specified, default single-stage training is used with epochs/lr from parameters
-# Uncomment to enable multi-stage training with progressive layer unfreezing
-training_stages:
-  stages:
-    - name: "Stage 1 - Train only one layer of encoder (enc5) and the decoder"
-      freeze_layers: ["enc1", "enc2", "enc3", "enc4"]
-      epochs: 10
-      lr: 0.005
-
-    - name: "Stage 2 - unlock finer layers of the encoder as well."
-      freeze_layers: ["enc1", "enc2"]
-      epochs: 10
-      lr: 0.001
 
 # ClearML configuration
 clearml:
