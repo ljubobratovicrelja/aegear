@@ -10,7 +10,7 @@ training:
   model_dir: "/workspace/models/efficient_unet"
   checkpoint_dir: "/workspace/models/efficient_unet/checkpoints"
 
-  batch_size: 256
+  batch_size: 128
   num_workers: 6
 
 # Model and training parameters
@@ -30,7 +30,7 @@ parameters:
   cbam: true
 
   # Data preprocessing
-  gaussian_sigma: 10.0
+  gaussian_sigma: 8.0
 
   # Loss function weights
   loss_params: "pos_weight=2.0,centroid_weight=0.1,sparsity_weight=0.1,dice_weight=1.0"
@@ -41,29 +41,12 @@ parameters:
   use_visualizer: true
   verbose: true
 
-  # Training stages - Progressive unfreezing strategy
   training_stages:
     stages:
-      # Stage 1: Train decoder only with frozen encoder
-      # This helps the decoder learn good initial features
       - name: "Stage 1 - Decoder training"
         freeze_layers: ["enc1", "enc2", "enc3"]
-        epochs: 20
-        lr: 0.005 # Higher LR for initial training
-
-      # Stage 2: Unfreeze upper encoder layers
-      # Fine-tune with moderate learning rate
-      - name: "Stage 2 - Upper layer fine-tuning"
-        freeze_layers: ["enc1", "enc2"] # Keep lower layers frozen
-        epochs: 15
-        lr: 0.002 # Moderate LR
-
-      # Stage 3: Fine-tune entire network
-      # Final polish with low learning rate
-      - name: "Stage 3 - Full network fine-tuning"
-        freeze_layers: [] # No layers frozen
-        epochs: 10
-        lr: 0.0005 # Low LR for fine-tuning
+        epochs: 30
+        lr: 0.005
 
 # RunPod configuration
 runpod:

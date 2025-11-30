@@ -307,9 +307,10 @@ def main():
             train_cfg = config['training']
             for key, value in train_cfg.items():
                 arg_key = key.replace('-', '_')
-                if not hasattr(args, arg_key) or getattr(args, arg_key) is None:
+                cli_flag = f"--{key.replace('_', '-')}"
+                if cli_flag not in sys.argv:
                     setattr(args, arg_key, value)
-        
+
         # Training parameters
         if 'parameters' in config:
             params_cfg = config['parameters']
@@ -353,6 +354,7 @@ def main():
             if args.timeout_hours == 24 and 'timeout_hours' in runpod_cfg:
                 args.timeout_hours = runpod_cfg['timeout_hours']
     
+
     # Validate required fields
     required_fields = ['task_name', 'model_type', 'data_manifest', 'model_dir', 'checkpoint_dir']
     missing_fields = [f for f in required_fields if not getattr(args, f, None)]
@@ -360,14 +362,14 @@ def main():
         print(f"Error: Missing required fields: {', '.join(missing_fields)}")
         print("  Provide them via --config file or command-line arguments")
         return 1
-    
+
     # Expand wildcards in task name (supports {date}, {time}, {datetime}, {timestamp})
     args.task_name = expand_task_name(args.task_name)
-    
+
     # Use training task_name for ClearML task if not explicitly set
     if not args.clearml_task:
         args.clearml_task = args.task_name
-    
+
     # Debug: Print boolean flags to verify they were loaded correctly
     print(f"\nBoolean flags loaded from config:")
     print(f"  autodownload: {args.autodownload}")
@@ -376,6 +378,11 @@ def main():
     print(f"  cbam: {args.cbam}")
     print(f"  continue_training: {args.continue_training}")
     print(f"  use_best_model: {args.use_best_model}\n")
+
+
+    # Ensure training_stages is always a JSON string before use
+    if isinstance(args.training_stages, dict):
+        args.training_stages = json.dumps(args.training_stages)
     
     # Validate required credentials
     if not args.api_token:
