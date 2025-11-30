@@ -140,7 +140,6 @@ export SCHEDULER_TYPE=${SCHEDULER_TYPE:-}
 export SCHEDULER_PARAMS=${SCHEDULER_PARAMS:-}
 export SEED=${SEED:-42}
 
-
 # Set output paths for model and checkpoints
 export MODEL_DIR=${MODEL_DIR:-$OUTPUT_DIR/models}
 export CHECKPOINT_DIR=${CHECKPOINT_DIR:-$OUTPUT_DIR/checkpoints}
