@@ -654,6 +654,7 @@ def train(
     checkpoint_dir,
     epoch_vis,
     training_stages,
+    training_stages_config=None,
     loss_fn=None,
     epoch_save_interval=1,
     model_type=None,
@@ -683,7 +684,7 @@ def train(
         'weight_decay': weight_decay,
         'use_visualizer': use_visualizer,
         'scheduler_config': scheduler_config,
-        'training_stages': training_stages,
+        'training_stages_config': training_stages_config,
         'loss_fn': loss_fn.__class__.__name__ if loss_fn is not None else None,
     }
     if clearml_task is not None:
