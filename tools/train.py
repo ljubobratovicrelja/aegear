@@ -12,6 +12,7 @@ from aegear.nn.training import (
     setup_model,
     get_default_training_stages,
     load_training_stages,
+    load_training_stages_from_config,
     EfficientUNetLoss,
     SiameseLoss
 )
@@ -41,6 +42,94 @@ def parse_loss_params(param_str):
             except ValueError:
                 params[k.strip()] = v.strip()
     return params
+
+
+def parse_training_stages_arg(stages_arg):
+    """
+    Parse training stages from command-line argument.
+    
+    Supports multiple formats:
+    1. Path to JSON file: "/path/to/stages.json"
+    2. Path to YAML file: "/path/to/stages.yaml"
+    3. JSON string: '{"stages": [{"freeze_layers": ["enc1"], "epochs": 10, "lr": 0.001}]}'
+    4. Inline format: "stage1:freeze=enc1,enc2:epochs=10:lr=0.001;stage2:freeze=enc1:epochs=5:lr=0.0001"
+    
+    Returns:
+        Either a path string (for JSON) or a list of stage dicts (for inline format, YAML, or JSON string).
+    """
+    import os
+    import json
+    
+    if not stages_arg:
+        return None
+    
+    # Try to parse as JSON string first (for config passed from YAML)
+    if stages_arg.strip().startswith(('{', '[')):
+        try:
+            parsed = json.loads(stages_arg)
+            # Handle both direct list and dict with 'stages' key
+            if isinstance(parsed, dict) and 'stages' in parsed:
+                return parsed['stages']
+            elif isinstance(parsed, list):
+                return parsed
+            else:
+                # Invalid structure, fall through
+                pass
+        except json.JSONDecodeError:
+            # Not valid JSON, try other formats
+            pass
+    
+    # Check if it's a file path
+    if os.path.isfile(stages_arg):
+        # Return path for JSON files (handled by load_training_stages)
+        if stages_arg.endswith('.json'):
+            return stages_arg
+        # Parse YAML files directly
+        elif stages_arg.endswith('.yaml') or stages_arg.endswith('.yml'):
+            import yaml
+            with open(stages_arg, 'r') as f:
+                stages_data = yaml.safe_load(f)
+            # Handle both direct list and dict with 'stages' key
+            if isinstance(stages_data, dict) and 'stages' in stages_data:
+                return stages_data['stages']
+            elif isinstance(stages_data, list):
+                return stages_data
+            else:
+                raise ValueError(f"YAML stages file must contain a list or dict with 'stages' key")
+        else:
+            # Assume JSON if no extension or unknown extension
+            return stages_arg
+    
+    # Parse inline format: \"stage1:freeze=enc1,enc2:epochs=10:lr=0.001;stage2:...\"\n    stages = []
+    for stage_str in stages_arg.split(';'):
+        stage_dict = {}
+        for part in stage_str.split(':'):
+            if '=' in part:
+                key, value = part.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                if key == 'freeze':
+                    # freeze_layers is a list
+                    stage_dict['freeze_layers'] = [v.strip() for v in value.split(',')]
+                elif key == 'epochs':
+                    stage_dict['epochs'] = int(value)
+                elif key == 'lr':
+                    stage_dict['lr'] = float(value)
+                elif key == 'name':
+                    stage_dict['name'] = value
+                else:
+                    # Store other parameters as-is
+                    try:
+                        stage_dict[key] = float(value)
+                    except ValueError:
+                        stage_dict[key] = value
+        
+        if stage_dict:  # Only add non-empty stages
+            stages.append(stage_dict)
+    
+    return stages if stages else None
+
 
 def main():
 
@@ -93,10 +182,36 @@ def main():
     logger = setup_logging()
     logger.info(f"Starting training for {args.model_type}")
 
+    # Print comprehensive training configuration summary
+    print("\n" + "="*80)
+    print("AEGEAR TRAINING CONFIGURATION")
+    print("="*80)
+    
+    # Task Information
+    print("\n[TASK INFORMATION]")
+    print("-" * 80)
+    if args.clearml_task:
+        print(f"  ClearML Project:      {args.clearml_project}")
+        print(f"  ClearML Task:         {args.clearml_task}")
+    else:
+        print(f"  ClearML:              Disabled")
+    print(f"  Model Type:           {args.model_type}")
+    print(f"  Data Manifest:        {args.data_manifest}")
+    print(f"  Model Directory:      {args.model_dir}")
+    print(f"  Checkpoint Directory: {args.checkpoint_dir}")
+    
+    # Model Architecture
+    print("\n[MODEL ARCHITECTURE]")
+    print("-" * 80)
+    print(f"  Activation Function:  {args.activation}")
+    print(f"  CBAM Attention:       {'Enabled' if args.cbam else 'Disabled'}")
+    print(f"  Pretrained Weights:   {args.weights}")
+    print(f"  Continue Training:    {'Yes' if args.continue_training else 'No'}")
+    print(f"  Use Best Model:       {'Yes' if args.use_best_model else 'No'}")
+    
     # Device selection
-    print("\n" + "="*60)
-    print("DEVICE SELECTION DEBUG")
-    print("="*60)
+    print("\n[DEVICE SELECTION]")
+    print("-" * 80)
     print(f"args.device from CLI: {args.device}")
     print(f"torch.cuda.is_available(): {torch.cuda.is_available()}")
     print(f"torch.cuda.device_count(): {torch.cuda.device_count()}")
@@ -112,7 +227,7 @@ def main():
         print(f"Device selection mode: EXPLICIT ({args.device})")
     
     print(f"Selected device: {device}")
-    print("="*60 + "\n")
+    print("-" * 80)
     
     # Validate device - fail early if CUDA was expected but unavailable
     if args.device in ["cuda", "auto"] and device == "cpu" and not torch.cuda.is_available():
@@ -156,11 +271,21 @@ def main():
     except TypeError:
         val_batches = "unknown"
 
-    print("Dataset diagnostics:")
-    print(f"  Train samples: {train_len}")
-    print(f"  Train batches/epoch: {train_batches}")
-    print(f"  Val samples: {val_len}")
-    print(f"  Val batches/epoch: {val_batches}")
+    # Dataset Configuration
+    print("\n[DATASET CONFIGURATION]")
+    print("-" * 80)
+    print(f"  Batch Size:           {args.batch_size}")
+    print(f"  Train Ratio:          {args.train_ratio:.2%}")
+    print(f"  Num Workers:          {args.num_workers}")
+    print(f"  Gaussian Sigma:       {args.gaussian_sigma}")
+    print(f"  Random Seed:          {args.seed}")
+    print(f"  Auto-download:        {'Enabled' if args.autodownload else 'Disabled'}")
+    print(f"  Verbose Mode:         {'Enabled' if args.verbose else 'Disabled'}")
+    print(f"\n  Dataset Statistics:")
+    print(f"    Train samples:      {train_len}")
+    print(f"    Train batches:      {train_batches}")
+    print(f"    Val samples:        {val_len}")
+    print(f"    Val batches:        {val_batches}")
 
     # Model setup
     # Map activation string to torch.nn activation class
@@ -198,7 +323,16 @@ def main():
 
     # Training stages
     if args.training_stages:
-        training_stages = load_training_stages(model, args.training_stages)
+        parsed_stages = parse_training_stages_arg(args.training_stages)
+        
+        if isinstance(parsed_stages, str):
+            # It's a JSON file path
+            training_stages = load_training_stages(model, parsed_stages)
+        elif isinstance(parsed_stages, list):
+            # It's already parsed (from YAML or inline format)
+            training_stages = load_training_stages_from_config(model, parsed_stages)
+        else:
+            raise ValueError(f"Unexpected training stages format: {type(parsed_stages)}")
     else:
         training_stages = get_default_training_stages(args.model_type, args.epochs, args.lr)
 
@@ -222,6 +356,86 @@ def main():
         scheduler_config['params'].pop('epochs', None)
         scheduler_config['params'].pop('steps_per_epoch', None)
 
+    # Print Training Stages Configuration
+    print("\n[TRAINING STAGES]")
+    print("-" * 80)
+    total_epochs = sum(stage['epochs'] for stage in training_stages)
+    print(f"  Total Stages:         {len(training_stages)}")
+    print(f"  Total Epochs:         {total_epochs}")
+    print()
+    
+    for idx, stage in enumerate(training_stages, 1):
+        stage_name = stage.get('name', f'Stage {idx}')
+        print(f"  Stage {idx}: {stage_name}")
+        print(f"    Epochs:             {stage['epochs']}")
+        print(f"    Learning Rate:      {stage['lr']:.6f}")
+        
+        # Show frozen layers
+        if 'freeze_layers' in stage and stage['freeze_layers']:
+            # Get layer names (they might be objects at this point)
+            frozen_layer_names = []
+            for layer in stage['freeze_layers']:
+                if hasattr(layer, '__class__'):
+                    # It's an actual layer object, try to get its name from the model
+                    layer_name = 'unknown'
+                    for name, module in model.named_modules():
+                        if module is layer:
+                            layer_name = name
+                            break
+                    frozen_layer_names.append(layer_name)
+                else:
+                    # It's a string
+                    frozen_layer_names.append(str(layer))
+            
+            print(f"    Frozen Layers:      {', '.join(frozen_layer_names) if frozen_layer_names else 'None'}")
+        else:
+            print(f"    Frozen Layers:      None (full model training)")
+        print()
+    
+    # Optimizer Configuration
+    print("\n[OPTIMIZER & SCHEDULER]")
+    print("-" * 80)
+    print(f"  Optimizer:            Adam")
+    print(f"  Weight Decay:         {args.weight_decay:.6f}")
+    if scheduler_config:
+        print(f"  LR Scheduler:         {scheduler_config['type']}")
+        if scheduler_config['params']:
+            print(f"  Scheduler Params:")
+            for key, value in scheduler_config['params'].items():
+                print(f"    {key:20s}: {value}")
+    else:
+        print(f"  LR Scheduler:         ReduceLROnPlateau (default)")
+        print(f"  Scheduler Params:")
+        print(f"    mode                : min")
+        print(f"    factor              : 0.5")
+        print(f"    patience            : 3")
+    
+    # Loss Function Configuration
+    print("\n[LOSS FUNCTION]")
+    print("-" * 80)
+    loss_class_name = loss_fn.__class__.__name__
+    print(f"  Loss Type:            {loss_class_name}")
+    if loss_params:
+        print(f"  Loss Parameters:")
+        for key, value in loss_params.items():
+            if isinstance(value, float):
+                print(f"    {key:20s}: {value:.4f}")
+            else:
+                print(f"    {key:20s}: {value}")
+    else:
+        print(f"  Loss Parameters:      (using defaults)")
+    
+    # Training Options
+    print("\n[TRAINING OPTIONS]")
+    print("-" * 80)
+    print(f"  Visualizer:           {'Enabled' if args.use_visualizer else 'Disabled'}")
+    print(f"  Epoch Vis Dir:        {args.epoch_vis}")
+    print(f"  Checkpoint Interval:  Every {args.epoch_save_interval} epoch(s)")
+    
+    print("\n" + "="*80)
+    print("STARTING TRAINING")
+    print("="*80 + "\n")
+
     train(
         model,
         train_loader,
@@ -241,22 +455,20 @@ def main():
     )
 
 if __name__ == "__main__":
-    """
-    Example usage:
-    python tools/train.py `
-        --model-type efficient_unet `
-        --batch-size 128 `
-        --gaussian-sigma 15.0 `
-        --num-workers 4 `
-        --verbose `
-        --use-visualizer `
-        --data-manifest data/training/tracking_merged/manifest.json `
-        --model-dir data/training/models/efficient_unet `
-        --checkpoint-dir data/training/models/efficient_unet/checkpoints `
-        --epoch-vis data/training/models/efficient_unet/epoch_vis `
-        --epoch-save-interval 3 `
-        --scheduler-type ReduceLROnPlateau `
-        --scheduler-params mode=min,factor=0.5,patience=3
-    """
+    # Example usage:
+    # python tools/train.py \
+    #     --model-type efficient_unet \
+    #     --batch-size 128 \
+    #     --gaussian-sigma 15.0 \
+    #     --num-workers 4 \
+    #     --verbose \
+    #     --use-visualizer \
+    #     --data-manifest data/training/tracking_merged/manifest.json \
+    #     --model-dir data/training/models/efficient_unet \
+    #     --checkpoint-dir data/training/models/efficient_unet/checkpoints \
+    #     --epoch-vis data/training/models/efficient_unet/epoch_vis \
+    #     --epoch-save-interval 3 \
+    #     --scheduler-type ReduceLROnPlateau \
+    #     --scheduler-params mode=min,factor=0.5,patience=3
     main()
 

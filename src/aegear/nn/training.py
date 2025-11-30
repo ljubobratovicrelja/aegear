@@ -158,12 +158,60 @@ def set_layers_eval(model, layers):
             layer_obj = layer
         layer_obj.eval()
 
+def load_training_stages_from_config(model, stages_config):
+    """
+    Load training stages from a dict/list structure (e.g., from YAML) and resolve layer names.
+    
+    Args:
+        model: The model instance (EfficientUNet or SiameseTracker).
+        stages_config: List of stage dicts or dict with stages key.
+    
+    Returns:
+        List of training stage dicts with freeze_layers resolved to actual layer objects.
+    
+    Example:
+        stages_config = [
+            {
+                "name": "Stage 1",
+                "freeze_layers": ["enc1", "enc2", "enc3", "enc4"],
+                "epochs": 10,
+                "lr": 0.001
+            }
+        ]
+    """
+    # Handle both direct list and dict with 'stages' key
+    if isinstance(stages_config, dict) and 'stages' in stages_config:
+        training_stages = stages_config['stages']
+    elif isinstance(stages_config, list):
+        training_stages = stages_config
+    else:
+        raise ValueError("stages_config must be a list of stages or dict with 'stages' key")
+    
+    # Resolve layer names to actual model layer objects
+    resolved_stages = []
+    for stage in training_stages:
+        resolved_stage = stage.copy()
+        if 'freeze_layers' in stage:
+            resolved_layers = []
+            for layer_name in stage['freeze_layers']:
+                layer = model
+                for attr in layer_name.split('.'):
+                    layer = getattr(layer, attr)
+                resolved_layers.append(layer)
+            resolved_stage['freeze_layers'] = resolved_layers
+        resolved_stages.append(resolved_stage)
+    
+    return resolved_stages
+
+
 def load_training_stages(model, stages_path=None):
     """
     Load training stages from a JSON file and resolve layer names to model attributes.
+    
     Args:
         model: The model instance (EfficientUNet or SiameseTracker).
         stages_path: Path to the JSON file.
+    
     Returns:
         List of training stage dicts with freeze_layers resolved.
     """
@@ -173,17 +221,8 @@ def load_training_stages(model, stages_path=None):
     with open(stages_path, 'r') as f:
         training_stages = json.load(f)
 
-    for stage in training_stages:
-        if 'freeze_layers' in stage:
-            resolved_layers = []
-            for layer_name in stage['freeze_layers']:
-                layer = model
-                for attr in layer_name.split('.'):
-                    layer = getattr(layer, attr)
-                resolved_layers.append(layer)
-            stage['freeze_layers'] = resolved_layers
-
-    return training_stages
+    # Use the new function to handle resolution
+    return load_training_stages_from_config(model, training_stages)
 
 def get_default_training_stages(model_name: str, epochs: int = 10, lr: float = 1e-4):
     """
