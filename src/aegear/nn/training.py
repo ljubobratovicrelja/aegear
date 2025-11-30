@@ -218,8 +218,12 @@ def load_training_stages(model, stages_path=None):
     if not os.path.exists(stages_path):
         raise IOError(f"Training stages file not found: {stages_path}")
 
+
     with open(stages_path, 'r') as f:
-        training_stages = json.load(f)
+        raw = f.read()
+        print("[DEBUG] Raw training stages file contents:")
+        print(raw)
+        training_stages = json.loads(raw)
 
     # Use the new function to handle resolution
     return load_training_stages_from_config(model, training_stages)
