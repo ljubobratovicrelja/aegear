@@ -163,14 +163,17 @@ echo '========================================='
 echo ''
 
 
+# Initialize ARGS variable
+ARGS=""
+
 # Write training stages to MODEL_DIR/training_stages.json if set
 if [ ! -z "$TRAINING_STAGES" ]; then
   mkdir -p "$MODEL_DIR"
   echo "$TRAINING_STAGES" > "$MODEL_DIR/training_stages.json"
-  ARGS="$ARGS --training-stages=$MODEL_DIR/training_stages.json"
+  ARGS="--training-stages=$MODEL_DIR/training_stages.json"
 fi
 
-ARGS="--model-type=$MODEL_TYPE --data-manifest=$DATA_MANIFEST --batch-size=$BATCH_SIZE --train-ratio=$TRAIN_RATIO --num-workers=$NUM_WORKERS --gaussian-sigma=$GAUSSIAN_SIGMA --weights=$WEIGHTS"
+ARGS="$ARGS --model-type=$MODEL_TYPE --data-manifest=$DATA_MANIFEST --batch-size=$BATCH_SIZE --train-ratio=$TRAIN_RATIO --num-workers=$NUM_WORKERS --gaussian-sigma=$GAUSSIAN_SIGMA --weights=$WEIGHTS"
 ARGS="$ARGS --model-dir=$MODEL_DIR --pretrained-model-dir=$PRETRAINED_MODEL_DIR --checkpoint-dir=$CHECKPOINT_DIR --epoch-vis=$EPOCH_VIS --epoch-save-interval=$EPOCH_SAVE_INTERVAL --device=$DEVICE --weight-decay=$WEIGHT_DECAY --activation=$ACTIVATION --seed=$SEED"
 [ ! -z "$CONTINUE_TRAINING" ] && [ "$CONTINUE_TRAINING" != "0" ] && ARGS="$ARGS --continue-training"
 [ ! -z "$USE_BEST_MODEL" ] && [ "$USE_BEST_MODEL" != "0" ] && ARGS="$ARGS --use-best-model"
