@@ -167,9 +167,10 @@ echo ''
 ARGS=""
 
 # Write training stages to MODEL_DIR/training_stages.json if set
+
 if [ ! -z "$TRAINING_STAGES" ]; then
   mkdir -p "$MODEL_DIR"
-  echo "$TRAINING_STAGES" > "$MODEL_DIR/training_stages.json"
+  printf "%s" "$TRAINING_STAGES" > "$MODEL_DIR/training_stages.json"
   ARGS="--training-stages=$MODEL_DIR/training_stages.json"
 fi
 
