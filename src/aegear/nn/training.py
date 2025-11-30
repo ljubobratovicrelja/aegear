@@ -654,7 +654,6 @@ def train(
     checkpoint_dir,
     epoch_vis,
     training_stages,
-    training_stages_config=None,
     loss_fn=None,
     epoch_save_interval=1,
     model_type=None,
@@ -684,7 +683,6 @@ def train(
         'weight_decay': weight_decay,
         'use_visualizer': use_visualizer,
         'scheduler_config': scheduler_config,
-        'training_stages_config': training_stages_config,
         'loss_fn': loss_fn.__class__.__name__ if loss_fn is not None else None,
     }
     if clearml_task is not None:
@@ -708,6 +706,9 @@ def train(
     except TypeError:
         total_val_batches = None
 
+    # Number of iteration (epoch) across all stages
+    global_iteration = 0
+
     for stage, training_stage in enumerate(training_stages):
         freeze_layers = training_stage["freeze_layers"]
         epochs = training_stage["epochs"]
@@ -726,7 +727,12 @@ def train(
 
         epoch_times = []
         total_epochs = epochs
+        
         for epoch in range(epochs):
+
+            # Increment global iteration
+            global_iteration += 1
+
             epoch_start = time.time()
             model.train()
             set_layers_eval(model, freeze_layers)
@@ -826,21 +832,21 @@ def train(
             # Logging to ClearML if available
             if clearml_task is not None:
                 logger = clearml_task.get_logger()
-                logger.report_scalar("loss", "train", iteration=epoch+1, value=train_loss)
-                logger.report_scalar("loss", "val", iteration=epoch+1, value=val_loss)
+                logger.report_scalar("loss", "train", iteration=global_iteration, value=train_loss)
+                logger.report_scalar("loss", "val", iteration=global_iteration, value=val_loss)
                 
                 # Log individual loss components
                 if train_loss_components:
                     num_train_batches = len(train_loader)
                     for key, value in train_loss_components.items():
                         avg_value = value / num_train_batches
-                        logger.report_scalar(f"loss_components/train", key, iteration=epoch+1, value=avg_value)
+                        logger.report_scalar(f"loss_components/train", key, iteration=global_iteration, value=avg_value)
                 
                 if val_loss_components:
                     num_val_batches = len(val_loader)
                     for key, value in val_loss_components.items():
                         avg_value = value / num_val_batches
-                        logger.report_scalar(f"loss_components/val", key, iteration=epoch+1, value=avg_value)
+                        logger.report_scalar(f"loss_components/val", key, iteration=global_iteration, value=avg_value)
 
                 # Log sample images from visualizer
                 if use_visualizer:
@@ -852,7 +858,7 @@ def train(
                         logger.report_matplotlib_figure(
                             title="Sample Evaluation",
                             series=f"Epoch {epoch+1}, Stage {stage+1}",
-                            iteration=epoch+1,
+                            iteration=global_iteration,
                             report_image=True,  # These are samples evaluated, so we report them like debug samples.
                             figure=perf_fig
                         )
@@ -861,7 +867,7 @@ def train(
                         logger.report_matplotlib_figure(
                             title="Activation Evaluation",
                             series=f"Epoch {epoch+1}, Stage {stage+1}",
-                            iteration=epoch+1,
+                            iteration=global_iteration,
                             report_image=False,  # These are plots to be inspected (show up among 'Plots' in ClearML UI)
                             figure=act_fig
                         )
@@ -882,7 +888,7 @@ def train(
             epoch_times.append(epoch_time)
             msg = get_epoch_progress_message(epoch+1, total_epochs, epoch_time, epoch_times)
             if clearml_task is not None:
-                logger.report_text(msg, logging.INFO, iteration=epoch+1)
+                logger.report_text(msg, logging.INFO, iteration=global_iteration)
             else:
                 logging.getLogger("aegear.train").info(msg)
             # --- End epoch timing and ETA logging ---
