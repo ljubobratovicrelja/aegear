@@ -330,10 +330,10 @@ def main():
                 elif not hasattr(args, arg_key) or current_value is None:
                     setattr(args, arg_key, value)
         
-        # Training stages configuration
-        if 'training_stages' in config and not args.training_stages:
-            # Convert stages config to JSON string format that can be passed as env var
-            args.training_stages = json.dumps(config['training_stages'])
+            # Training stages configuration
+            if 'training_stages' in config['parameters'] and not args.training_stages:
+                # Convert stages config to JSON string format that can be passed as env var
+                args.training_stages = json.dumps(config['parameters']['training_stages'])
         
         # ClearML configuration
         if 'clearml' in config:
