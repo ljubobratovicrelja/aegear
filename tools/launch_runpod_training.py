@@ -14,14 +14,79 @@ Environment variables:
     DOCKERHUB_PAT: Docker Hub personal access token (optional)
 """
 
-# ...existing code...
 import os
 import sys
 import argparse
-from typing import Dict
+import json
+import yaml
+from pathlib import Path
+from datetime import datetime
 from aegear.nn.ops.runpod_launcher import RunPodLauncher
 from aegear.nn.ops import build_training_env_vars
 
+
+def expand_task_name(task_name):
+    """Expand wildcards in task name with datetime values.
+    
+    Supported wildcards:
+        {date} or {DATE} -> YYYY-MM-DD (e.g., 2025-11-30)
+        {time} or {TIME} -> HH-MM-SS (e.g., 14-30-45)
+        {datetime} or {DATETIME} -> YYYYMMDD_HHMMSS (e.g., 20251130_143045)
+        {timestamp} or {TIMESTAMP} -> Unix timestamp (e.g., 1732976400)
+    
+    Args:
+        task_name: Task name string with optional wildcards
+        
+    Returns:
+        str: Expanded task name with wildcards replaced
+    
+    Examples:
+        >>> expand_task_name("training_{date}")
+        "training_2025-11-30"
+        >>> expand_task_name("exp_{datetime}_v1")
+        "exp_20251130_143045_v1"
+    """
+    if not task_name:
+        return task_name
+    
+    now = datetime.now()
+    
+    # Replace all wildcard variants (case-insensitive)
+    replacements = {
+        '{date}': now.strftime('%Y-%m-%d'),
+        '{DATE}': now.strftime('%Y-%m-%d'),
+        '{time}': now.strftime('%H-%M-%S'),
+        '{TIME}': now.strftime('%H-%M-%S'),
+        '{datetime}': now.strftime('%Y%m%d_%H%M%S'),
+        '{DATETIME}': now.strftime('%Y%m%d_%H%M%S'),
+        '{timestamp}': str(int(now.timestamp())),
+        '{TIMESTAMP}': str(int(now.timestamp())),
+    }
+    
+    expanded_name = task_name
+    for wildcard, value in replacements.items():
+        expanded_name = expanded_name.replace(wildcard, value)
+    
+    return expanded_name
+
+
+def load_config(config_path):
+    """Load training configuration from YAML file.
+    
+    Args:
+        config_path: Path to YAML configuration file
+        
+    Returns:
+        dict: Configuration dictionary
+    """
+    config_path = Path(config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    return config
 
 
 def parse_args():
@@ -31,7 +96,13 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic usage
+  # Using configuration file
+  python launch_runpod_training.py --config config/training_config.yaml
+  
+  # Using configuration file with overrides
+  python launch_runpod_training.py --config config/training_config.yaml --epochs 30 --lr 0.01
+  
+  # Basic usage without config file
   python launch_runpod_training.py \\
       --task-name efficient_unet_exp1 \\
       --model-type efficient_unet \\
@@ -56,6 +127,13 @@ Environment Variables:
   CLEARML_API_ACCESS_KEY  ClearML API access key (optional)
   CLEARML_API_SECRET_KEY  ClearML API secret key (optional)
         """
+    )
+    
+    # Configuration file
+    parser.add_argument(
+        "--config",
+        type=str,
+        help="Path to YAML configuration file (CLI args override config file values)"
     )
     
     # RunPod configuration
@@ -131,36 +209,31 @@ Environment Variables:
         help="Maximum hours before force termination (default: 24)"
     )
     
-    # Training configuration (required)
-    train_group = parser.add_argument_group("Training Configuration (Required)")
+    # Training configuration (required when not using config file)
+    train_group = parser.add_argument_group("Training Configuration (Required without --config)")
     train_group.add_argument(
         "--task-name",
         type=str,
-        required=True,
         help="Unique task name for this run"
     )
     train_group.add_argument(
         "--model-type",
         choices=["efficient_unet", "siamese"],
-        required=True,
         help="Model type to train"
     )
     train_group.add_argument(
         "--data-manifest",
         type=str,
-        required=True,
         help="Path to dataset manifest JSON (in pod, e.g., /workspace/data/manifest.json)"
     )
     train_group.add_argument(
         "--model-dir",
         type=str,
-        required=True,
         help="Directory for model outputs (in pod, e.g., /workspace/models/efficient_unet)"
     )
     train_group.add_argument(
         "--checkpoint-dir",
         type=str,
-        required=True,
         help="Directory for checkpoints (in pod, e.g., /workspace/models/efficient_unet/checkpoints)"
     )
     train_group.add_argument(
@@ -209,6 +282,101 @@ def main():
     """Main entry point."""
     args = parse_args()
     
+    # Load configuration file if provided
+    if args.config:
+        print(f"Loading configuration from: {args.config}")
+        config = load_config(args.config)
+        
+        # Apply config values as defaults (CLI args take precedence)
+        # RunPod configuration
+        if 'runpod' in config:
+            runpod_cfg = config['runpod']
+            if args.gpu_type == RunPodLauncher.DEFAULT_GPU_TYPE and 'gpu_type' in runpod_cfg:
+                args.gpu_type = runpod_cfg['gpu_type']
+            if args.gpu_count == 1 and 'gpu_count' in runpod_cfg:
+                args.gpu_count = runpod_cfg['gpu_count']
+            if args.volume_size == RunPodLauncher.DEFAULT_VOLUME_SIZE and 'volume_size' in runpod_cfg:
+                args.volume_size = runpod_cfg['volume_size']
+            if args.container_disk_size == RunPodLauncher.DEFAULT_CONTAINER_DISK_SIZE and 'container_disk_size' in runpod_cfg:
+                args.container_disk_size = runpod_cfg['container_disk_size']
+            if args.image_name == RunPodLauncher.DEFAULT_IMAGE and 'docker_image' in runpod_cfg:
+                args.image_name = runpod_cfg['docker_image']
+        
+        # Training configuration
+        if 'training' in config:
+            train_cfg = config['training']
+            for key, value in train_cfg.items():
+                arg_key = key.replace('-', '_')
+                if not hasattr(args, arg_key) or getattr(args, arg_key) is None:
+                    setattr(args, arg_key, value)
+        
+        # Training parameters
+        if 'parameters' in config:
+            params_cfg = config['parameters']
+            # List of boolean flags (action="store_true" arguments)
+            bool_flags = ['continue_training', 'use_best_model', 'cbam', 'use_visualizer', 
+                         'autodownload', 'verbose']
+            
+            for key, value in params_cfg.items():
+                arg_key = key.replace('-', '_')
+                current_value = getattr(args, arg_key, None)
+                
+                # For boolean flags, check if it's False (default) and not explicitly set via CLI
+                if arg_key in bool_flags:
+                    # Only apply config value if current value is False (wasn't set via CLI)
+                    if current_value is False:
+                        setattr(args, arg_key, value)
+                # For other parameters, apply if None
+                elif not hasattr(args, arg_key) or current_value is None:
+                    setattr(args, arg_key, value)
+        
+        # Training stages configuration
+        if 'training_stages' in config and not args.training_stages:
+            # Convert stages config to JSON string format that can be passed as env var
+            args.training_stages = json.dumps(config['training_stages'])
+        
+        # ClearML configuration
+        if 'clearml' in config:
+            clearml_cfg = config['clearml']
+            if args.clearml_project == 'aegear' and 'project_name' in clearml_cfg:
+                args.clearml_project = clearml_cfg['project_name']
+        
+        # Monitoring options from runpod config
+        if 'runpod' in config:
+            runpod_cfg = config['runpod']
+            if 'monitor' in runpod_cfg and not runpod_cfg['monitor']:
+                args.no_monitor = True
+            if 'auto_terminate' in runpod_cfg and not runpod_cfg['auto_terminate']:
+                args.no_auto_terminate = True
+            if args.check_interval == 60 and 'check_interval' in runpod_cfg:
+                args.check_interval = runpod_cfg['check_interval']
+            if args.timeout_hours == 24 and 'timeout_hours' in runpod_cfg:
+                args.timeout_hours = runpod_cfg['timeout_hours']
+    
+    # Validate required fields
+    required_fields = ['task_name', 'model_type', 'data_manifest', 'model_dir', 'checkpoint_dir']
+    missing_fields = [f for f in required_fields if not getattr(args, f, None)]
+    if missing_fields:
+        print(f"Error: Missing required fields: {', '.join(missing_fields)}")
+        print("  Provide them via --config file or command-line arguments")
+        return 1
+    
+    # Expand wildcards in task name (supports {date}, {time}, {datetime}, {timestamp})
+    args.task_name = expand_task_name(args.task_name)
+    
+    # Use training task_name for ClearML task if not explicitly set
+    if not args.clearml_task:
+        args.clearml_task = args.task_name
+    
+    # Debug: Print boolean flags to verify they were loaded correctly
+    print(f"\nBoolean flags loaded from config:")
+    print(f"  autodownload: {args.autodownload}")
+    print(f"  use_visualizer: {args.use_visualizer}")
+    print(f"  verbose: {args.verbose}")
+    print(f"  cbam: {args.cbam}")
+    print(f"  continue_training: {args.continue_training}")
+    print(f"  use_best_model: {args.use_best_model}\n")
+    
     # Validate required credentials
     if not args.api_token:
         print("Error: RunPod API token not provided.")
@@ -225,18 +393,102 @@ def main():
     # Build environment variables
     env_vars = build_training_env_vars(args)
 
-    # Display configuration
-    print("\n" + "="*60)
+    # Display comprehensive configuration
+    print("\n" + "="*80)
     print("AEGEAR TRAINING - RUNPOD LAUNCHER")
-    print("="*60)
-    print(f"Task: {args.task_name}")
-    print(f"Model: {args.model_type}")
-    print(f"Branch: {args.branch}")
-    print(f"GPU: {args.gpu_type} x{args.gpu_count}")
-    print(f"Image: {args.image_name}")
+    print("="*80)
+    
+    # Task Information
+    print("\n[TASK CONFIGURATION]")
+    print("-" * 80)
+    print(f"  Task Name:            {args.task_name}")
+    print(f"  Model Type:           {args.model_type}")
+    print(f"  Git Branch:           {args.branch}")
+    print(f"  Data Manifest:        {args.data_manifest}")
+    print(f"  Model Directory:      {args.model_dir}")
+    print(f"  Checkpoint Directory: {args.checkpoint_dir}")
+    
+    # ClearML Configuration
     if args.clearml_task:
-        print(f"ClearML: {args.clearml_project}/{args.clearml_task}")
-    print("="*60 + "\n")
+        print("\n[CLEARML TRACKING]")
+        print("-" * 80)
+        print(f"  Project:              {args.clearml_project}")
+        print(f"  Task:                 {args.clearml_task}")
+    
+    # RunPod Configuration
+    print("\n[RUNPOD CONFIGURATION]")
+    print("-" * 80)
+    print(f"  GPU Type:             {args.gpu_type}")
+    print(f"  GPU Count:            {args.gpu_count}")
+    print(f"  Docker Image:         {args.image_name}")
+    print(f"  Volume Size:          {args.volume_size} GB")
+    print(f"  Container Disk:       {args.container_disk_size} GB")
+    
+    # Training Parameters
+    print("\n[TRAINING PARAMETERS]")
+    print("-" * 80)
+    
+    # Parse training stages if provided to show summary
+    stages_info = None
+    if args.training_stages:
+        try:
+            # Try to parse the stages for display
+            if args.training_stages.startswith(('{', '[')):
+                stages_data = json.loads(args.training_stages)
+                if isinstance(stages_data, dict) and 'stages' in stages_data:
+                    stages_info = stages_data['stages']
+                elif isinstance(stages_data, list):
+                    stages_info = stages_data
+        except:
+            pass
+    
+    if stages_info:
+        total_epochs = sum(stage.get('epochs', 0) for stage in stages_info)
+        print(f"  Training Stages:      {len(stages_info)} stage(s)")
+        print(f"  Total Epochs:         {total_epochs}")
+        for idx, stage in enumerate(stages_info, 1):
+            stage_name = stage.get('name', f'Stage {idx}')
+            stage_epochs = stage.get('epochs', '?')
+            stage_lr = stage.get('lr', '?')
+            frozen = stage.get('freeze_layers', [])
+            print(f"    Stage {idx} ({stage_name}): {stage_epochs} epochs, LR={stage_lr}, Frozen: {len(frozen)} layers")
+    else:
+        print(f"  Epochs:               {args.epochs if args.epochs else 'default'}")
+        print(f"  Learning Rate:        {args.lr if args.lr else 'default'}")
+    
+    print(f"  Batch Size:           {args.batch_size if args.batch_size else 'default'}")
+    print(f"  Weight Decay:         {args.weight_decay if args.weight_decay else 'default'}")
+    print(f"  Num Workers:          {args.num_workers if args.num_workers else 'default'}")
+    print(f"  Gaussian Sigma:       {args.gaussian_sigma if args.gaussian_sigma else 'default'}")
+    
+    # Model Configuration
+    print("\n[MODEL CONFIGURATION]")
+    print("-" * 80)
+    print(f"  Activation:           {args.activation if args.activation else 'relu'}")
+    print(f"  CBAM Attention:       {'Yes' if args.cbam else 'No'}")
+    print(f"  Scheduler:            {args.scheduler_type if args.scheduler_type else 'ReduceLROnPlateau (default)'}")
+    if args.loss_params:
+        print(f"  Loss Parameters:      {args.loss_params}")
+    
+    # Options
+    print("\n[OPTIONS]")
+    print("-" * 80)
+    print(f"  Auto-download:        {'Yes' if args.autodownload else 'No'}")
+    print(f"  Use Visualizer:       {'Yes' if args.use_visualizer else 'No'}")
+    print(f"  Verbose Mode:         {'Yes' if args.verbose else 'No'}")
+    print(f"  Random Seed:          {args.seed if args.seed else 42}")
+    
+    # Monitoring
+    print("\n[MONITORING]")
+    print("-" * 80)
+    print(f"  Monitor Pod:          {'Yes' if not args.no_monitor else 'No'}")
+    print(f"  Auto Terminate:       {'Yes' if not args.no_auto_terminate else 'No'}")
+    print(f"  Check Interval:       {args.check_interval}s")
+    print(f"  Timeout:              {args.timeout_hours}h")
+    
+    print("\n" + "="*80)
+    print("LAUNCHING POD...")
+    print("="*80 + "\n")
 
     try:
         # Launch pod

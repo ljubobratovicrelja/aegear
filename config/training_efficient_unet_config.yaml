@@ -1,0 +1,92 @@
+# Training Configuration for Aegear Single Model Training
+# This file defines the configuration for a single training run
+
+# Note that this configuration resembles the configuration achieved through HPO.
+
+# Training configuration
+training:
+  # Task name supports wildcards for automatic datetime insertion:
+  #   {date} or {DATE} -> YYYY-MM-DD (e.g., 2025-11-30)
+  #   {time} or {TIME} -> HH-MM-SS (e.g., 14-30-45)
+  #   {datetime} or {DATETIME} -> YYYYMMDD_HHMMSS (e.g., 20251130_143045)
+  #   {timestamp} or {TIMESTAMP} -> Unix timestamp
+  task_name: "efficient_unet_train_{datetime}"
+  model_type: "efficient_unet"
+  branch: "main"
+  data_manifest: "/workspace/data/manifest.json"
+  model_dir: "/workspace/models/efficient_unet"
+  checkpoint_dir: "/workspace/models/efficient_unet/checkpoints"
+
+  # Training parameters
+  batch_size: 256
+  num_workers: 6 # Default value, adjust as needed
+
+# Model and training parameters
+parameters:
+  # Optimizer settings
+  lr: 0.005
+  weight_decay: 0.00001 # 1e-05
+
+  # Scheduler settings
+  scheduler_type: "OneCycleLR"
+  scheduler_params: "max_lr=0.005,anneal_strategy=cos"
+
+  # Model architecture
+  activation: "gelu"
+  cbam: true
+
+  # Data preprocessing
+  gaussian_sigma: 8.0
+
+  # Loss function weights
+  loss_params: "pos_weight=2.0,centroid_weight=0.1,sparsity_weight=0.1,dice_weight=1.0"
+
+  # Training options
+  device: "cuda"
+  autodownload: true
+  use_visualizer: true
+  verbose: true
+
+  # Advanced options (uncomment and set as needed)
+  # train_ratio: 0.8
+  # weights: null
+  # epoch_save_interval: 5
+  # seed: 42
+  # continue_training: false
+  # use_best_model: false
+  # training_stages: null
+
+# RunPod configuration
+runpod:
+  gpu_type: "NVIDIA GeForce RTX 3090"
+  gpu_count: 1
+  docker_image: "docker.io/ljubobratovicrelja/aegear:latest"
+  volume_size: 10 # GB
+  container_disk_size: 8 # GB
+
+  # Monitoring options
+  monitor: true # Set to false to disable monitoring
+  auto_terminate: true # Set to false to prevent automatic termination
+  check_interval: 60 # Seconds between status checks
+  timeout_hours: 24 # Maximum hours before force termination
+
+# Training stages configuration (optional)
+# If not specified, default single-stage training is used with epochs/lr from parameters
+# Uncomment to enable multi-stage training with progressive layer unfreezing
+training_stages:
+  stages:
+    - name: "Stage 1 - Train only one layer of encoder (enc5) and the decoder"
+      freeze_layers: ["enc1", "enc2", "enc3", "enc4"]
+      epochs: 10
+      lr: 0.005
+
+    - name: "Stage 2 - unlock finer layers of the encoder as well."
+      freeze_layers: ["enc1", "enc2"]
+      epochs: 10
+      lr: 0.001
+
+# ClearML configuration
+clearml:
+  project_name: "aegear-efficient-unet"
+  # Note: ClearML task name automatically uses training.task_name
+  # No need to specify task_name here unless you want it to differ
